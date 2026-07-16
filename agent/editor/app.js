@@ -17,6 +17,126 @@ var S={
   _thinkStart:0,
 };
 
+// ─── localStorage 持久化 ───
+var STORAGE_KEY = 'agicode_session';
+function saveState(){
+  try{
+    // 只存核心数据，不存 DOM
+    var data = {
+      msgs: [],  // {type, text, html, acc}
+      wf: {steps:S.wfSteps, done:S.wfDone, total:S.wfTotal},
+      tc: S.toolCount,
+      ev: S.events.slice(-200),  // 只存最近 200 条
+      ts: window._toolStats || {},
+      last: S.last || '',
+    };
+    // 从 DOM 提取消息
+    var children = msgs.querySelectorAll(':scope > *');
+    children.forEach(function(el){
+      var m = {type:'asst'};
+      if(el.classList.contains('msg-user')) m.type='user';
+      else if(el.classList.contains('msg-asst')) m.type='asst';
+      else if(el.classList.contains('tool-line')) {m.type='tool'; m.tname=el.dataset.tname||''; m.tseq=el.dataset.tseq||'';}
+      else if(el.classList.contains('diff-block')) return; // diff 不存，让工具重新渲染
+      else if(el.classList.contains('step-sep')) {m.type='sep'; m.text=el.textContent; data.msgs.push(m); return;}
+      else if(el.classList.contains('think-block')) {m.type='think'; m.text=el.querySelector('.tb-b')?.textContent||''; data.msgs.push(m); return;}
+      else if(el.classList.contains('msg-sys')) {m.type='sys'; m.text=el.textContent; data.msgs.push(m); return;}
+      else if(el.classList.contains('msg-err')) {m.type='err'; m.text=el.textContent; data.msgs.push(m); return;}
+      else return; // skip others
+
+      var mc = el.querySelector('.mc');
+      if(mc) m.html = mc.innerHTML;
+      if(el._acc) m.acc = el._acc;
+      data.msgs.push(m);
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }catch(e){/* quota exceeded etc */}
+}
+
+function loadState(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    var data = JSON.parse(raw);
+    if(!data || !data.msgs) return false;
+
+    // Restore messages
+    msgs.innerHTML = '';
+    data.msgs.forEach(function(m){
+      if(m.type==='user'){
+        var el=div('msg msg-user');
+        el.innerHTML='<div class="mc">'+(m.html||esc(m.text||''))+'</div><div class="mt">-</div>';
+        msgs.appendChild(el);
+      } else if(m.type==='asst'){
+        var el=div('msg msg-asst');
+        el.innerHTML='<div class="mc">'+(m.html||'')+'</div><div class="mt">-</div>';
+        if(m.acc) el._acc=m.acc;
+        msgs.appendChild(el);
+      } else if(m.type==='tool'){
+        var el=div('tool-line');
+        if(m.tname) el.dataset.tname=m.tname;
+        if(m.tseq) el.dataset.tseq=m.tseq;
+        el.innerHTML=m.html||'<span class="tl-icon">⚡</span><span class="tl-name">tool</span><span class="tl-status tl-done">✅</span>';
+        msgs.appendChild(el);
+      } else if(m.type==='sep'){
+        var el=div('step-sep step-done');
+        el.textContent=m.text||'';
+        msgs.appendChild(el);
+      } else if(m.type==='think'){
+        var el=div('think-block');
+        el.innerHTML='<div class="think-h">🧠 思考</div><div class="think-b">'+esc(m.text||'')+'</div>';
+        el.querySelector('.think-h').onclick=function(){el.classList.toggle('collapsed')};
+        msgs.appendChild(el);
+      } else if(m.type==='sys'){
+        var el=div('msg msg-sys');
+        el.innerHTML='<div class="mc">'+esc(m.text||'')+'</div>';
+        msgs.appendChild(el);
+      } else if(m.type==='err'){
+        var el=div('msg msg-err');
+        el.innerHTML='<div class="mc">'+esc(m.text||'')+'</div>';
+        msgs.appendChild(el);
+      }
+    });
+
+    // Restore workflow
+    if(data.wf){
+      S.wfSteps=data.wf.steps||[];
+      S.wfDone=data.wf.done||0;
+      S.wfTotal=data.wf.total||0;
+      renderWfPanel();
+      updateWfBar();
+    }
+
+    // Restore events
+    if(data.ev) S.events=data.ev;
+    renderEvLog();
+
+    // Restore tool stats
+    if(data.ts){ window._toolStats=data.ts;
+      Object.keys(data.ts).forEach(function(n){
+        var cnt=$('tcnt-'+n); if(cnt) cnt.textContent=data.ts[n];
+      });
+    }
+
+    // Restore counts
+    if(data.tc){S.toolCount=data.tc;$('st-c').textContent=data.tc;}
+    if(data.last) S.last=data.last;
+
+    // Scroll to bottom
+    setTimeout(function(){msgs.scrollTop=msgs.scrollHeight;},100);
+    return true;
+  }catch(e){return false;}
+}
+
+// 在每次状态改变后自动保存
+function autoSave(){
+  if(typeof msgs!=='undefined' && msgs){
+    // 防抖：延迟保存，避免频繁写入
+    if(window._saveTimer) clearTimeout(window._saveTimer);
+    window._saveTimer = setTimeout(saveState, 500);
+  }
+}
+
 // ─── DOM ───
 var $=function(id){return document.getElementById(id)};
 var msgs=$('msgs'), ib=$('inp'), sb=$('send-btn'), st=$('st-t'), hds=$('hd-s');
@@ -169,7 +289,7 @@ function hasDiff(t){return t.indexOf('@@ -')>=0||(t.indexOf('\n+')>=0&&t.indexOf
 // ══════════════════════════════════════════════════
 
 // Assistant text (streaming accumulator)
-function addText(delta){
+function addText(delta){try{autoSave()}catch(e){}
   var last=msgs.lastElementChild;
   if(last&&last.classList.contains('msg-asst')){
     last._acc=(last._acc||'')+delta;
@@ -185,7 +305,7 @@ function addText(delta){
 }
 
 // User message
-function addUser(text){
+function addUser(text){try{autoSave()}catch(e){}
   var el=div('msg msg-user');
   el.innerHTML='<div class="mc">'+esc(text)+'</div><div class="mt">'+ts()+'</div>';
   msgs.appendChild(el);scrollB();
@@ -193,7 +313,7 @@ function addUser(text){
 
 // Tool call line — compact, Claude Code style
 var _toolSeq=0;
-function addToolCall(name, path, extra){
+function addToolCall(name, path, extra){try{autoSave()}catch(e){}
   var icon=I[name]||'⚡';
   var extraHtml=extra?' <span class="tl-extra">'+esc(extra)+'</span>':'';
   var pathHtml=path?'<span class="tl-target">'+esc(path)+'</span>':'';
@@ -313,7 +433,7 @@ function renderDiff(refEl, diffText, filePath){
 }
 
 // Thinking block
-function addThink(text){
+function addThink(text){try{autoSave()}catch(e){}
   var last=msgs.lastElementChild;
   if(last&&last.classList.contains('think-block')){
     var b=last.querySelector('.think-b');
@@ -327,14 +447,14 @@ function addThink(text){
 }
 
 // System message
-function addSys(text){
+function addSys(text){try{autoSave()}catch(e){}
   var el=div('msg msg-sys');
   el.innerHTML='<div class="mc">'+esc(text)+'</div>';
   msgs.appendChild(el);scrollB();
 }
 
 // Error message
-function addErr(text){
+function addErr(text){try{autoSave()}catch(e){}
   var el=div('msg msg-err');
   el.innerHTML='<div class="mc">'+esc(text)+'</div>';
   msgs.appendChild(el);scrollB();
@@ -425,13 +545,14 @@ function send(){
 function stop(){if(!S.busy)return;fetch('/api/stop',{method:'POST'}).catch(function(){});setBusy(0);addSys('⏹ 已终止');}
 function retry(){if(S.busy||!S.last)return;ib.value=S.last;send();}
 
-function clear(){
+function clear(){try{autoSave()}catch(e){}
   msgs.innerHTML='';
   S.toolCount=0;S.wfSteps=[];S.wfDone=0;S.wfTotal=0;$('st-c').textContent='0';
   S.events=[];
   wff.style.width='0%';wfc.textContent='0/0';
   $('wf-c').innerHTML='<div style="padding:20px;text-align:center;color:var(--fg-3);font-size:12px">📋 发送指令后自动创建</div>';
   renderEvLog();
+  localStorage.removeItem(STORAGE_KEY);
   fetch('/api/clear',{method:'POST'}).catch(function(){});
   addSys('🗑 对话已清空');
   toast('对话已清空','info');
@@ -446,14 +567,14 @@ function setBusy(b){
 // WORKFLOW
 // ══════════════════════════════════════════════════
 
-function updateWf(wf){
+function updateWf(wf){try{autoSave()}catch(e){}
   if(!wf)return;
   if(wf.steps){S.wfSteps=wf.steps;S.wfTotal=wf.steps.length;S.wfDone=wf.steps.filter(function(s){return s.status==='done'||s.status==='skipped';}).length;}
   if(wf.progress!==undefined)wff.style.width=(wf.progress*100)+'%';
   renderWfPanel();updateWfBar();
 }
 
-function updateWfStep(id,status,name,result){
+function updateWfStep(id,status,name,result){try{autoSave()}catch(e){}
   for(var i=0;i<S.wfSteps.length;i++){if(S.wfSteps[i].id===id||S.wfSteps[i].name===name){S.wfSteps[i].status=status;break;}}
   S.wfDone=S.wfSteps.filter(function(s){return s.status==='done'||s.status==='skipped';}).length;
   S.wfTotal=S.wfSteps.length;
@@ -502,7 +623,7 @@ function renderEvFilters(){
   });
 }
 
-function addEvent(type,data){
+function addEvent(type,data){try{autoSave()}catch(e){}
   S.events.push({type:type,data:data||'',ts:Date.now()});
   if(S.events.length>500)S.events.shift();
   renderEvLog();
@@ -795,14 +916,27 @@ function init(){
   buildTools();renderEvFilters();buildConfig();buildAgents();
   loadMCPServers();
 
+  // Restore session from localStorage（刷新不丢消息）
+  var restored = loadState();
+  if(!restored){
+    setTimeout(function(){addSys('⚡ AgiCode v2 · 全透明自主 AI 智能体')},100);
+  }
+
   // Connect SSE
   connectSSE();
 
   // Hide loading
   setTimeout(function(){$('loading').classList.add('hidden')},800);
 
-  // Welcome
-  setTimeout(function(){addSys('⚡ AgiCode v2 · 全透明自主 AI 智能体');toast('🎉 欢迎使用 AgiCode','success')},1200);
+  // Welcome toast (only on fresh session)
+  if(!restored){
+    setTimeout(function(){toast('🎉 欢迎使用 AgiCode','success')},1200);
+  }
+
+  // Before unload: 保存最后状态，防止刷新丢数据
+  window.addEventListener('beforeunload', function(){
+    saveState();
+  });
 
   // Periodic context check
   setInterval(function(){
