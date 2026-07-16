@@ -265,6 +265,7 @@ class Agent:
                 "tool_calls": [],
             }
             tool_results = []
+            _dead_loop_break = False
 
             for tc in tool_calls:
                 tc_id = tc.get("id", "")
@@ -291,7 +292,7 @@ class Agent:
                 }
                 assistant_msg["tool_calls"].append(tool_call_entry)
 
-                # ── 重复调用检测 ──
+                # ── 重复调用检测（只标记，不 break——让当前工具跑完保证消息配对）──
                 call_sig = tool_name + ":" + str(list(args.items()))[:80]
                 recent_calls.append(call_sig)
                 if len(recent_calls) > REPEAT_THRESHOLD:
@@ -300,11 +301,12 @@ class Agent:
                         self.transcript.emit("loop", warning="repeated_call",
                                              reason=f"重复调用 {tool_name} {REPEAT_THRESHOLD} 次")
                         final_response += "\n[系统: 检测到重复调用，自动终止]"
-                        break
+                        recent_calls.clear()
+                        _dead_loop_break = True
+                        # 不 break——让当前工具正常执行完，保证 tool_call ↔ tool_result 配对完整
 
                 # ── 执行工具 ──
                 t0 = time.time()
-                # 通知回调：工具开始（附带参数），解决之前工具名丢失的 bug
                 if on_tool_start:
                     on_tool_start(tool_name, args)
                 try:
@@ -313,13 +315,11 @@ class Agent:
                     result = f"[工具异常] {e}"
                 elapsed_ms = (time.time() - t0) * 1000
 
-                # ── 工具结果分析 ──
                 error_type = ""
                 if isinstance(result, str):
                     if any(k in result.lower() for k in ("error", "失败", "not found", "找不到")):
                         error_type = "tool_failed"
 
-                # ── 推送：工具结果事件 ──
                 result_preview = str(result)[:2000] if result else ""
                 self.transcript.tool("result", tool_name=tool_name, tool_id=tc_id,
                                      result=result_preview[:500],
@@ -328,13 +328,16 @@ class Agent:
                 if on_tool_result:
                     on_tool_result(result_preview[:500])
 
-                # ── 构建工具结果消息 ──
                 tool_result_msg = {
                     "role": "tool",
                     "tool_call_id": tc_id,
                     "content": result_preview,
                 }
                 tool_results.append(tool_result_msg)
+
+            # ── 防死循环标志：跳过消息追加，直接跳出 while ──
+            if _dead_loop_break:
+                break
 
             # ── 追加消息 ──
             if assistant_msg.get("tool_calls"):
