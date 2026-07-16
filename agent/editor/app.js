@@ -878,6 +878,160 @@ msgs.addEventListener('scroll',function(){
 scrollH.onclick=function(){S.ab=1;scrollB();this.classList.remove('show');};
 
 // ══════════════════════════════════════════════════
+// PROBE LEFT PANEL
+// ══════════════════════════════════════════════════
+var _probeTimer = null, _probeEvents = [];
+
+function updateProbe(){
+  fetch('/api/probe')
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.status !== 'ok') return;
+      var s = d.stats || {}, sm = d.summary || {};
+      var tc = sm.events_by_type && sm.events_by_type.tool_call || 0;
+      var ec = s.error_count || 0;
+      var up = s.uptime || 0;
+
+      // Session
+      $('pr-sess').textContent = (s.session || '').substring(0,12) + '...';
+
+      // Stats
+      $('pr-uptime').textContent = up < 60 ? Math.round(up) + 's' : Math.round(up/60) + 'm ' + Math.round(up%60) + 's';
+      $('pr-tcalls').textContent = tc;
+      var errEl = $('pr-errors');
+      errEl.textContent = ec;
+      errEl.className = 'pr-val' + (ec > 0 ? ' err' : '');
+
+      // Load bar (tool calls per minute approximation)
+      var tpm = up > 0 ? Math.round((tc / up) * 60) : 0;
+      $('pr-loadbar').style.width = Math.min(tpm * 3, 95) + '%';
+      $('pr-dot').style.background = ec > 0 ? 'var(--accent6)' : 'var(--accent4)';
+    })
+    .catch(function(){});
+}
+
+function updateProbeSlider(events){
+  var c = $('pr-slider'); if(!c) return;
+  var tools = [];
+  // Get last 20 tool call durations
+  for(var i=events.length-1; i>=0 && tools.length<24; i--){
+    var e = events[i];
+    if(e && e.type === 'tool_call' && e.data){
+      tools.push({dur: e.data.duration || 0, slow: e.data.slow || false});
+    }
+  }
+  tools.reverse();
+  if(tools.length === 0){
+    c.innerHTML = '<div class="pr-empty" style="padding:4px">—</div>';
+    return;
+  }
+  var maxDur = 1;
+  tools.forEach(function(t){ if(t.dur > maxDur) maxDur = t.dur; });
+  var h = '';
+  tools.forEach(function(t){
+    var pct = Math.max(3, Math.round((t.dur / maxDur) * 28));
+    var cls = t.slow ? 'pr-sl slow' : 'pr-sl';
+    h += '<div class="' + cls + '" style="height:' + pct + 'px" title="' + t.dur.toFixed(1) + 's"></div>';
+  });
+  c.innerHTML = h;
+}
+
+function updateProbeEvents(events){
+  var c = $('pr-events'); if(!c) return;
+  if(!events || events.length === 0){
+    c.innerHTML = '<div class="pr-empty">等待事件...</div>';
+    return;
+  }
+  var show = events.slice(-15);
+  var h = '';
+  show.forEach(function(e){
+    var t = e.ts ? (new Date(e.ts).toLocaleTimeString().substring(0,5)) : '';
+    var d = e.data || {};
+    var ty = e.type || '?';
+    var label = '';
+    if(ty === 'tool_call') label = (d.tool || '') + ' ' + (d.duration ? (d.duration.toFixed(1)+'s') : '');
+    else if(ty === 'error') label = (d.message || d.type || '');
+    else label = JSON.stringify(d).substring(0,40);
+    h += '<div class="pr-event"><span class="pr-evtm">'+t+'</span><span class="pr-evty '+ty+'">'+(ty==='tool_call'?'🔧':(ty==='error'?'❌':'·'))+'</span><span class="pr-evda">'+esc(label.substring(0,50))+'</span></div>';
+  });
+  c.innerHTML = h;
+}
+
+function pollProbe(){
+  if(_probeTimer) clearTimeout(_probeTimer);
+  fetch('/api/probe')
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.status === 'ok'){
+        updateProbe();
+        // We don't have detailed events from /api/probe, so track locally from SSE
+      }
+    })
+    .catch(function(){})
+    .finally(function(){
+      _probeTimer = setTimeout(pollProbe, 2000);
+    });
+}
+
+// Track events locally for probe display (lightweight)
+function trackProbeEvent(type, data){
+  _probeEvents.push({type: type, data: data, ts: Date.now()});
+  if(_probeEvents.length > 200) _probeEvents.shift();
+  updateProbeSlider(_probeEvents);
+  updateProbeEvents(_probeEvents);
+}
+
+// Hook into SSE tool events for probe
+(function(){
+  var _origAdd = window.A ? window.A.addToolCall : null;
+  var _origResult = window.A ? window.A.addToolResult : null;
+})();
+
+// Export probe functions
+function copyProbeData(){
+  var txt = '=== AgiCode 探针报告 ===\n';
+  txt += '时间: ' + new Date().toLocaleString() + '\n';
+  txt += '工具调用: ' + $('pr-tcalls').textContent + '\n';
+  txt += '错误: ' + $('pr-errors').textContent + '\n';
+  txt += '运行: ' + $('pr-uptime').textContent + '\n';
+  txt += '会话: ' + $('pr-sess').textContent + '\n\n';
+  txt += '--- 最近事件 ---\n';
+  _probeEvents.slice(-30).forEach(function(e){
+    var d = e.data || {};
+    txt += '[' + new Date(e.ts).toLocaleTimeString() + '] ' + e.type;
+    if(e.type === 'tool_call') txt += ' ' + (d.tool||'') + ' ' + (d.duration ? d.duration.toFixed(1)+'s' : '');
+    txt += '\n';
+  });
+
+  // Copy to clipboard
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){
+      toast('📋 探针数据已复制到剪贴板', 'success');
+    }).catch(function(){
+      fallbackCopy(txt);
+    });
+  } else {
+    fallbackCopy(txt);
+  }
+}
+
+function fallbackCopy(text){
+  var ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('📋 探针数据已复制', 'success'); }
+  catch(e) { toast('❌ 复制失败', 'error'); }
+  document.body.removeChild(ta);
+}
+
+// Track tool calls from addToolResult
+var _origToolResult = addToolResult;
+addToolResult = function(name, isErr, durMs, resultText, toolPath){
+  trackProbeEvent('tool_call', {tool: name, duration: durMs/1000, slow: durMs > 3000, error: isErr});
+  return _origToolResult(name, isErr, durMs, resultText, toolPath);
+};
+
+// ══════════════════════════════════════════════════
 // EXPORTS
 // ══════════════════════════════════════════════════
 
@@ -905,6 +1059,7 @@ window.A={
   showMCPForm:showMCPForm,hideMCPForm:hideMCPForm,
   doConnectMCP:doConnectMCP,disconnectMCP:disconnectMCP,
   toast:toast,
+  copyProbe:copyProbeData,
 };
 
 // ══════════════════════════════════════════════════
@@ -930,6 +1085,9 @@ function init(){
   // Build panels
   buildTools();renderEvFilters();buildConfig();buildAgents();
   loadMCPServers();
+
+  // Start probe monitoring
+  pollProbe();
 
   // Restore session from localStorage（刷新不丢消息）
   var restored = loadState();

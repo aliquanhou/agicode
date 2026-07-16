@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AgiBeauty</string>
+    <string name="capture">拍照</string>
+    <string name="switch_camera">切换</string>
+    <string name="gallery">相册</string>
+    <string name="beauty_level">美颜等级</string>
+    <string name="reset">重置</string>
+    <string name="save">保存</string>
+    <string name="compare">对比</string>
+    <string name="ai_auto">AI 智能</string>
+
+    <!-- 美颜工具名称 -->
+    <string name="tool_smooth">磨皮</string>
+    <string name="tool_white">美白</string>
+    <string name="tool_thin_face">瘦脸</string>
+    <string name="tool_big_eye">大眼</string>
+    <string name="tool_red">红润</string>
+    <string name="tool_sharpen">锐化</string>
+    <string name="tool_contrast">对比度</string>
+    <string name="tool_saturate">饱和度</string>
+    <string name="tool_warm">暖色</string>
+    <string name="tool_cool">冷色</string>
+    <string name="tool_vignette">暗角</string>
+    <string name="tool_blur">背景虚化</string>
+    <string name="tool_hdr">HDR</string>
+    <string name="tool_clarity">清晰度</string>
+    <string name="tool_vibrance">自然饱和度</string>
+    <string name="tool_highlight">高光</string>
+    <string name="tool_shadow">阴影</string>
+    <string name="tool_grain">胶片颗粒</string>
+    <string name="tool_lut">滤镜</string>
+    <string name="tool_teeth">美牙</string>
+    <string name="tool_nose">瘦鼻</string>
+</resources>

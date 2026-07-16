@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调 - 霓虹紫 -->
+    <color name="primary">#FF7B2C</color>
+    <color name="primary_dark">#FF416C</color>
+    <color name="primary_light">#FF9A9E</color>
+
+    <!-- 背景色 -->
+    <color name="background_dark">#0D0D1A</color>
+    <color name="background_card">#1A1A2E</color>
+    <color name="background_card_light">#252540</color>
+
+    <!-- 霓虹色 -->
+    <color name="neon_pink">#FF2D78</color>
+    <color name="neon_blue">#00D4FF</color>
+    <color name="neon_purple">#B44AFF</color>
+    <color name="neon_green">#00FF88</color>
+    <color name="neon_yellow">#FFD700</color>
+    <color name="neon_orange">#FF6B35</color>
+    <color name="neon_cyan">#00FFF0</color>
+    <color name="neon_red">#FF004D</color>
+
+    <!-- 文字色 -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B0B0C0</color>
+    <color name="text_hint">#707080</color>
+
+    <!-- 工具按钮色 -->
+    <color name="tool_smooth">#FF6B9D</color>
+    <color name="tool_white">#FFE4E1</color>
+    <color name="tool_thin">#FFD700</color>
+    <color name="tool_eye">#00D4FF</color>
+    <color name="tool_red">#FF4757</color>
+    <color name="tool_sharpen">#FF6B35</color>
+    <color name="tool_contrast">#B44AFF</color>
+    <color name="tool_saturate">#00FF88</color>
+    <color name="tool_warm">#FF9A3C</color>
+    <color name="tool_cool">#4DABF7</color>
+    <color name="tool_vignette">#2D2D44</color>
+    <color name="tool_blur">#748FFC</color>
+    <color name="tool_hdr">#FFD43B</color>
+    <color name="tool_clarity">#69DB7C</color>
+    <color name="tool_vibrance">#DA77F2</color>
+    <color name="tool_highlight">#FFE066</color>
+    <color name="tool_shadow">#4C6EF5</color>
+    <color name="tool_grain">#CED4DA</color>
+    <color name="tool_lut">#F783AC</color>
+    <color name="tool_teeth">#E0FFFF</color>
+    <color name="tool_nose">#FFB8C6</color>
+
+    <!-- 滑块 -->
+    <color name="slider_track">#333355</color>
+    <color name="slider_progress">#FF7B2C</color>
+    <color name="slider_thumb">#FFFFFF</color>
+
+    <!-- 半透明遮罩 -->
+    <color name="overlay_dark">#80000000</color>
+    <color name="overlay_light">#40FFFFFF</color>
+</resources>

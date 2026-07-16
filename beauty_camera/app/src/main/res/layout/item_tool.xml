@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 美颜参数调节项（华为风格滑块） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp">
+
+    <!-- 工具名称 -->
+    <TextView
+        android:id="@+id/tool_name"
+        android:layout_width="70dp"
+        android:layout_height="wrap_content"
+        android:text="磨皮"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp" />
+
+    <!-- 滑块 -->
+    <SeekBar
+        android:id="@+id/tool_seekbar"
+        android:layout_width="0dp"
+        android:layout_height="36dp"
+        android:layout_weight="1"
+        android:max="100"
+        android:progress="50"
+        android:progressDrawable="@drawable/bg_seekbar"
+        android:thumb="@drawable/bg_thumb" />
+
+    <!-- 数值 -->
+    <TextView
+        android:id="@+id/tool_value"
+        android:layout_width="36dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:text="50"
+        android:textColor="#FF7B2C"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

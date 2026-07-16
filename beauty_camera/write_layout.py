@@ -1,0 +1,347 @@
+import os
+
+content = r"""<?xml version="1.0" encoding="utf-8"?>
+<!-- AgiBeauty Pro v3.0 - 专业相机 UI -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:keepScreenOn="true"
+    android:background="#000000">
+
+    <!-- 相机预览 -->
+    <TextureView
+        android:id="@+id/camera_preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 网格线覆盖层 -->
+    <View
+        android:id="@+id/grid_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_grid"
+        android:visibility="gone" />
+
+    <!-- 水平仪覆盖层 -->
+    <View
+        android:id="@+id/level_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_level"
+        android:visibility="gone" />
+
+    <!-- 直方图 -->
+    <ImageView
+        android:id="@+id/histogram_view"
+        android:layout_width="200dp"
+        android:layout_height="80dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="100dp"
+        android:layout_marginEnd="16dp"
+        android:visibility="gone" />
+
+    <!-- ========== 顶部栏 ========== -->
+    <RelativeLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="28dp"
+        android:background="@drawable/bg_top_gradient">
+
+        <!-- 闪光灯 -->
+        <ImageButton
+            android:id="@+id/btn_flash"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="16dp"
+            android:background="@null"
+            android:src="@drawable/ic_flash_auto"
+            android:contentDescription="闪光灯" />
+
+        <!-- 场景模式 -->
+        <TextView
+            android:id="@+id/tv_scene_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@id/btn_settings"
+            android:layout_toEndOf="@id/btn_flash"
+            android:gravity="center"
+            android:text="自动"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:background="@drawable/bg_ai_badge" />
+
+        <!-- PRO 模式 -->
+        <TextView
+            android:id="@+id/tv_pro_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@id/btn_settings"
+            android:layout_marginEnd="4dp"
+            android:gravity="center"
+            android:text="AUTO"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:background="@drawable/bg_ai_badge" />
+
+        <!-- 设置/网格 -->
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@id/btn_switch"
+            android:background="@null"
+            android:src="@drawable/ic_grid"
+            android:contentDescription="网格" />
+
+        <!-- 切换摄像头 -->
+        <ImageButton
+            android:id="@+id/btn_switch"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_centerVertical="true"
+            android:layout_alignParentEnd="true"
+            android:layout_marginEnd="16dp"
+            android:background="@null"
+            android:src="@drawable/ic_switch"
+            android:contentDescription="切换" />
+    </RelativeLayout>
+
+    <!-- ========== 变焦控制 ========== -->
+    <LinearLayout
+        android:id="@+id/zoom_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="12dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_zoom_bar"
+        android:padding="4dp">
+
+        <TextView
+            android:id="@+id/tv_zoom"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="1.0x"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:gravity="center" />
+
+        <SeekBar
+            android:id="@+id/zoom_slider"
+            android:layout_width="160dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:max="100"
+            android:progress="0"
+            android:rotation="270"
+            android:thumb="@drawable/bg_slider_thumb"
+            android:progressDrawable="@drawable/bg_slider_progress" />
+    </LinearLayout>
+
+    <!-- ========== 场景模式面板 ========== -->
+    <LinearLayout
+        android:id="@+id/scene_panel"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_gravity="top"
+        android:layout_marginTop="96dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:padding="4dp">
+
+        <TextView
+            android:id="@+id/btn_scene_auto"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="自动"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:background="@drawable/bg_scene_btn" />
+
+        <TextView
+            android:id="@+id/btn_scene_hdr"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="HDR"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:background="@drawable/bg_scene_btn" />
+
+        <TextView
+            android:id="@+id/btn_scene_night"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="夜景"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:background="@drawable/bg_scene_btn" />
+
+        <TextView
+            android:id="@+id/btn_scene_portrait"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="人像"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:background="@drawable/bg_scene_btn" />
+    </LinearLayout>
+
+    <!-- ========== 专业模式面板 ========== -->
+    <LinearLayout
+        android:id="@+id/pro_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="120dp"
+        android:orientation="vertical"
+        android:background="#DD1A1A2E"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <!-- ISO -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:id="@+id/tv_iso_value" android:layout_width="60dp"
+                android:text="ISO: 100" android:textColor="#FFD700" android:textSize="12sp"/>
+            <SeekBar android:id="@+id/sb_iso" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:max="300" android:progress="5"/>
+        </LinearLayout>
+
+        <!-- 快门 -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+            <TextView android:id="@+id/tv_shutter_value" android:layout_width="60dp"
+                android:text="1/100s" android:textColor="#FFD700" android:textSize="12sp"/>
+            <SeekBar android:id="@+id/sb_shutter" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:max="300" android:progress="10"/>
+        </LinearLayout>
+
+        <!-- EV -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+            <TextView android:id="@+id/tv_ev_value" android:layout_width="60dp"
+                android:text="EV: 0" android:textColor="#FFD700" android:textSize="12sp"/>
+            <SeekBar android:id="@+id/sb_ev" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:max="20" android:progress="10"/>
+        </LinearLayout>
+
+        <!-- 白平衡 -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+            <TextView android:id="@+id/tv_wb_value" android:layout_width="60dp"
+                android:text="WB: 5000K" android:textColor="#FFD700" android:textSize="12sp"/>
+            <SeekBar android:id="@+id/sb_wb" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:max="100" android:progress="50"/>
+        </LinearLayout>
+
+        <!-- 手动对焦 -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+            <TextView android:id="@+id/tv_focus_value" android:layout_width="60dp"
+                android:text="MF: ∞" android:textColor="#FFD700" android:textSize="12sp"/>
+            <SeekBar android:id="@+id/sb_focus" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:max="100" android:progress="0"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ========== 底部栏 ========== -->
+    <RelativeLayout
+        android:id="@+id/bottom_bar"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/bg_bottom_gradient">
+
+        <!-- 相册预览 -->
+        <ImageButton
+            android:id="@+id/btn_gallery"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="32dp"
+            android:background="@drawable/bg_gallery_thumb"
+            android:src="@drawable/ic_gallery"
+            android:contentDescription="相册" />
+
+        <!-- 快门按钮 -->
+        <FrameLayout
+            android:id="@+id/shutter_ring"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_centerInParent="true"
+            android:background="@drawable/bg_shutter_ring">
+
+            <ImageButton
+                android:id="@+id/btn_shutter"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_shutter"
+                android:src="@android:drawable/ic_menu_camera"
+                android:contentDescription="拍照" />
+        </FrameLayout>
+
+        <!-- 模式切换 -->
+        <ImageButton
+            android:id="@+id/btn_mode_switch"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:layout_marginEnd="32dp"
+            android:background="@null"
+            android:src="@drawable/ic_mode_video"
+            android:contentDescription="模式" />
+    </RelativeLayout>
+
+    <!-- ========== 滤镜面板 ========== -->
+    <HorizontalScrollView
+        android:id="@+id/filter_panel"
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="130dp"
+        android:visibility="gone"
+        android:background="#88000000">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="4dp">
+        </LinearLayout>
+    </HorizontalScrollView>
+
+</FrameLayout>
+"""
+
+target = 'app/src/main/res/layout/activity_main.xml'
+with open(target, 'w', encoding='utf-8') as f:
+    f.write(content)
+print(f'Written {len(content)} bytes to {target}')
