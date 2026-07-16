@@ -491,6 +491,10 @@ function connectSSE(){
     try{var d=JSON.parse(e.data);if(d.delta)addThink(d.delta);}catch(x){}
   });
 
+  S.sse.addEventListener('error',function(e){
+    try{var d=JSON.parse(e.data);if(d.message){addErr(d.message);setBusy(0);addEvent('error',d.message);}}catch(x){}
+  });
+
   S.sse.addEventListener('tool',function(e){
     try{var d=JSON.parse(e.data);
       if(d.subtype==='start'){addToolCall(d.tool_name,d.file_path||'',d.args_preview||'');addEvent('tool','→ '+d.tool_name+' '+d.file_path);}
@@ -506,10 +510,6 @@ function connectSSE(){
         addEvent('session','■ end');
       }
     }catch(x){}
-  });
-
-  S.sse.addEventListener('error',function(e){
-    try{var d=JSON.parse(e.data);if(d.message){addErr(d.message);setBusy(0);addEvent('error',d.message);}}catch(x){}
   });
 
   S.sse.addEventListener('phase',function(e){
@@ -540,6 +540,10 @@ function connectSSE(){
         }
       }
     }catch(x){}
+  });
+
+  S.sse.addEventListener('audit',function(e){
+    try{var d=JSON.parse(e.data);if(d)addAuditEvent(d);}catch(x){}
   });
 }
 
@@ -880,156 +884,107 @@ scrollH.onclick=function(){S.ab=1;scrollB();this.classList.remove('show');};
 // ══════════════════════════════════════════════════
 // PROBE LEFT PANEL
 // ══════════════════════════════════════════════════
-var _probeTimer = null, _probeEvents = [];
+// ══════════════════════════════════════════════════
+// AUDITOR LEFT PANEL
+// ══════════════════════════════════════════════════
+var _auditRecords = [];
 
-function updateProbe(){
-  fetch('/api/probe')
+// 审核状态图标
+var _auIcons = {pass:'✅',warn:'⚠️',retry:'🔄',fix:'🔧',block:'🚦'};
+
+// 接收 SSE audit 事件
+function addAuditEvent(d){
+  _auditRecords.push(d);
+  if(_auditRecords.length > 300) _auditRecords.shift();
+  renderAudit();
+}
+
+function renderAudit(){
+  // 统计
+  var counts = {pass:0, warn:0, retry:0, fix:0, block:0};
+  _auditRecords.forEach(function(r){ counts[r.severity] = (counts[r.severity]||0) + 1; });
+  var total = _auditRecords.length;
+  $('au-pass').textContent = counts.pass;
+  $('au-warn').textContent = counts.warn;
+  $('au-retry').textContent = counts.retry;
+  $('au-fix').textContent = counts.fix;
+  $('au-block').textContent = counts.block;
+  $('au-total').textContent = total;
+
+  // 健康状态
+  var bad = counts.retry + counts.fix + counts.block;
+  var ratio = total > 0 ? bad / total : 0;
+  var health = 'excellent', healthLabel = '⚡ 健康';
+  if(ratio > 0.05) { health = 'good'; healthLabel = '👍 良好'; }
+  if(ratio > 0.15) { health = 'fair'; healthLabel = '⚠️ 一般'; }
+  if(ratio > 0.30) { health = 'poor'; healthLabel = '❌ 较差'; }
+  var he = $('au-health');
+  he.className = 'au-health ' + health;
+  he.textContent = healthLabel;
+
+  // 审核流水
+  var c = $('au-items');
+  if(_auditRecords.length === 0){
+    c.innerHTML = '<div class="au-empty">等待工具调用...</div>';
+    return;
+  }
+  var show = _auditRecords.slice(-30);
+  var h = '';
+  show.forEach(function(r){
+    var icon = _auIcons[r.severity] || '·';
+    var target = '';
+    if(r.tool === 'bash') target = (r.args && r.args.command || '').substring(0,24);
+    else if(r.tool === 'read'||r.tool==='write'||r.tool==='edit') target = (r.args && r.args.file_path || '').substring(0,24);
+    else if(r.tool === 'grep'||r.tool==='glob') target = (r.args && (r.args.pattern||r.args.query) || '').substring(0,24);
+    else target = r.tool;
+    var msg = r.message ? ' '+r.message : '';
+    h += '<div class="au-item"><span class="au-ic">'+icon+'</span><span class="au-tl">'+esc(r.tool||'')+'</span><span class="au-tg">'+esc(target)+''+esc(msg.substring(0,30))+'</span><span class="au-tm">'+r.duration.toFixed(1)+'s</span></div>';
+  });
+  c.innerHTML = h;
+}
+
+// 轮询审核统计
+function pollAudit(){
+  fetch('/api/audit/stats')
     .then(function(r){return r.json()})
     .then(function(d){
-      if(d.status !== 'ok') return;
-      var s = d.stats || {}, sm = d.summary || {};
-      var tc = sm.events_by_type && sm.events_by_type.tool_call || 0;
-      var ec = s.error_count || 0;
-      var up = s.uptime || 0;
-
-      // Session
-      $('pr-sess').textContent = (s.session || '').substring(0,12) + '...';
-
-      // Stats
-      $('pr-uptime').textContent = up < 60 ? Math.round(up) + 's' : Math.round(up/60) + 'm ' + Math.round(up%60) + 's';
-      $('pr-tcalls').textContent = tc;
-      var errEl = $('pr-errors');
-      errEl.textContent = ec;
-      errEl.className = 'pr-val' + (ec > 0 ? ' err' : '');
-
-      // Load bar (tool calls per minute approximation)
-      var tpm = up > 0 ? Math.round((tc / up) * 60) : 0;
-      $('pr-loadbar').style.width = Math.min(tpm * 3, 95) + '%';
-      $('pr-dot').style.background = ec > 0 ? 'var(--accent6)' : 'var(--accent4)';
+      if(d.status === 'ok' && d.stats && _auditRecords.length === 0){
+        // Only update on initial load; SSE events handle real-time
+      }
     })
     .catch(function(){});
 }
 
-function updateProbeSlider(events){
-  var c = $('pr-slider'); if(!c) return;
-  var tools = [];
-  // Get last 20 tool call durations
-  for(var i=events.length-1; i>=0 && tools.length<24; i--){
-    var e = events[i];
-    if(e && e.type === 'tool_call' && e.data){
-      tools.push({dur: e.data.duration || 0, slow: e.data.slow || false});
-    }
-  }
-  tools.reverse();
-  if(tools.length === 0){
-    c.innerHTML = '<div class="pr-empty" style="padding:4px">—</div>';
-    return;
-  }
-  var maxDur = 1;
-  tools.forEach(function(t){ if(t.dur > maxDur) maxDur = t.dur; });
-  var h = '';
-  tools.forEach(function(t){
-    var pct = Math.max(3, Math.round((t.dur / maxDur) * 28));
-    var cls = t.slow ? 'pr-sl slow' : 'pr-sl';
-    h += '<div class="' + cls + '" style="height:' + pct + 'px" title="' + t.dur.toFixed(1) + 's"></div>';
-  });
-  c.innerHTML = h;
-}
-
-function updateProbeEvents(events){
-  var c = $('pr-events'); if(!c) return;
-  if(!events || events.length === 0){
-    c.innerHTML = '<div class="pr-empty">等待事件...</div>';
-    return;
-  }
-  var show = events.slice(-15);
-  var h = '';
-  show.forEach(function(e){
-    var t = e.ts ? (new Date(e.ts).toLocaleTimeString().substring(0,5)) : '';
-    var d = e.data || {};
-    var ty = e.type || '?';
-    var label = '';
-    if(ty === 'tool_call') label = (d.tool || '') + ' ' + (d.duration ? (d.duration.toFixed(1)+'s') : '');
-    else if(ty === 'error') label = (d.message || d.type || '');
-    else label = JSON.stringify(d).substring(0,40);
-    h += '<div class="pr-event"><span class="pr-evtm">'+t+'</span><span class="pr-evty '+ty+'">'+(ty==='tool_call'?'🔧':(ty==='error'?'❌':'·'))+'</span><span class="pr-evda">'+esc(label.substring(0,50))+'</span></div>';
-  });
-  c.innerHTML = h;
-}
-
-function pollProbe(){
-  if(_probeTimer) clearTimeout(_probeTimer);
-  fetch('/api/probe')
+// 复制审核报告
+function copyAuditReport(){
+  fetch('/api/audit/report')
     .then(function(r){return r.json()})
     .then(function(d){
-      if(d.status === 'ok'){
-        updateProbe();
-        // We don't have detailed events from /api/probe, so track locally from SSE
+      if(d.status !== 'ok' || !d.report) return;
+      var txt = d.report;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function(){ toast('📋 审核报告已复制', 'success'); }).catch(function(){ fallbackCopy(txt); });
+      } else {
+        fallbackCopy(txt);
       }
     })
-    .catch(function(){})
-    .finally(function(){
-      _probeTimer = setTimeout(pollProbe, 2000);
-    });
+    .catch(function(){ toast('❌ 获取审核报告失败', 'error'); });
 }
 
-// Track events locally for probe display (lightweight)
-function trackProbeEvent(type, data){
-  _probeEvents.push({type: type, data: data, ts: Date.now()});
-  if(_probeEvents.length > 200) _probeEvents.shift();
-  updateProbeSlider(_probeEvents);
-  updateProbeEvents(_probeEvents);
-}
-
-// Hook into SSE tool events for probe
-(function(){
-  var _origAdd = window.A ? window.A.addToolCall : null;
-  var _origResult = window.A ? window.A.addToolResult : null;
-})();
-
-// Export probe functions
-function copyProbeData(){
-  var txt = '=== AgiCode 探针报告 ===\n';
-  txt += '时间: ' + new Date().toLocaleString() + '\n';
-  txt += '工具调用: ' + $('pr-tcalls').textContent + '\n';
-  txt += '错误: ' + $('pr-errors').textContent + '\n';
-  txt += '运行: ' + $('pr-uptime').textContent + '\n';
-  txt += '会话: ' + $('pr-sess').textContent + '\n\n';
-  txt += '--- 最近事件 ---\n';
-  _probeEvents.slice(-30).forEach(function(e){
-    var d = e.data || {};
-    txt += '[' + new Date(e.ts).toLocaleTimeString() + '] ' + e.type;
-    if(e.type === 'tool_call') txt += ' ' + (d.tool||'') + ' ' + (d.duration ? d.duration.toFixed(1)+'s' : '');
-    txt += '\n';
-  });
-
-  // Copy to clipboard
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(txt).then(function(){
-      toast('📋 探针数据已复制到剪贴板', 'success');
-    }).catch(function(){
-      fallbackCopy(txt);
-    });
-  } else {
-    fallbackCopy(txt);
-  }
+function clearAudit(){
+  _auditRecords = [];
+  renderAudit();
+  toast('🗑 审核记录已清空', 'info');
 }
 
 function fallbackCopy(text){
   var ta = document.createElement('textarea');
   ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); toast('📋 探针数据已复制', 'success'); }
+  try { document.execCommand('copy'); toast('📋 已复制', 'success'); }
   catch(e) { toast('❌ 复制失败', 'error'); }
   document.body.removeChild(ta);
 }
-
-// Track tool calls from addToolResult
-var _origToolResult = addToolResult;
-addToolResult = function(name, isErr, durMs, resultText, toolPath){
-  trackProbeEvent('tool_call', {tool: name, duration: durMs/1000, slow: durMs > 3000, error: isErr});
-  return _origToolResult(name, isErr, durMs, resultText, toolPath);
-};
 
 // ══════════════════════════════════════════════════
 // EXPORTS
@@ -1059,7 +1014,7 @@ window.A={
   showMCPForm:showMCPForm,hideMCPForm:hideMCPForm,
   doConnectMCP:doConnectMCP,disconnectMCP:disconnectMCP,
   toast:toast,
-  copyProbe:copyProbeData,
+  copyAuditReport:copyAuditReport,clearAudit:clearAudit,
 };
 
 // ══════════════════════════════════════════════════
@@ -1086,8 +1041,8 @@ function init(){
   buildTools();renderEvFilters();buildConfig();buildAgents();
   loadMCPServers();
 
-  // Start probe monitoring
-  pollProbe();
+  // Start auditor panel
+  pollAudit();
 
   // Restore session from localStorage（刷新不丢消息）
   var restored = loadState();

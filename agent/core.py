@@ -180,13 +180,13 @@ class Agent:
         final_response = ""
         tool_round = 0
         start_time = time.time()
-        max_rounds = self.config.get("max_tool_rounds", 15)  # 硬上限 15 轮
+        max_rounds = self.config.get("max_tool_rounds", 50)  # 上限 50 轮（多文件 APK 编译需要）
         # 重复调用检测（按工具名，不看参数——变参绕不过）
         recent_tool_names: list[str] = []
-        SAME_TOOL_LIMIT = 6  # 同一工具名连续 6 次就打断
+        SAME_TOOL_LIMIT = 12  # 同一工具名连续 12 次才打断（写多文件 APK 正常）
         # 语义停滞检测：追踪每次调用的工具名和结果长度
         recent_content_hashes: list[int] = []
-        STALL_ROUNDS = 10  # 10 轮没有实质性输出变化就打断
+        STALL_ROUNDS = 20  # 20 轮没有实质性输出变化才打断
 
         # 同步 workflow 到 session（工具函数可访问）
         set_session_workflow(self.workflow)
@@ -228,9 +228,9 @@ class Agent:
             round_hint = {
                 "role": "user",
                 "content": (
-                    f"[系统进度: 第 {tool_round}/{max_rounds} 轮工具调用] "
-                    f"已耗时 {elapsed:.0f}s。请在必要的工具调用后尽快给出最终答案。"
-                    f"如果不需要再调用工具，直接回复即可。"
+                    f"[系统进度: 第 {tool_round}/{max_rounds} 轮工具调用，"
+                    f"已耗时 {elapsed:.0f}s] "
+                    f"如果任务未完成请继续，已完成则直接回复即可。"
                 )
             }
 
@@ -340,12 +340,35 @@ class Agent:
                         error_type = "tool_failed"
 
                 result_preview = str(result)[:2000] if result else ""
+
+                # ── 审核引擎（自动检查+修复）──
+                try:
+                    from .auditor import audit_tool_call
+                    audit_result = audit_tool_call(
+                        tool_name, args, result or "",
+                        elapsed_ms / 1000, error_type,
+                    )
+                    if audit_result and audit_result.severity == "block":
+                        final_response += f"\n[审核] {audit_result.message}"
+                        _dead_loop_break = True
+                    if audit_result and audit_result.severity == "fix":
+                        result += f"\n[审核: {audit_result.message}]"
+                        error_type = ""
+                except Exception:
+                    pass
+
                 self.transcript.tool("result", tool_name=tool_name, tool_id=tc_id,
                                      result=result_preview[:500],
                                      duration_ms=elapsed_ms,
                                      error_type=error_type)
                 if on_tool_result:
-                    on_tool_result(result_preview[:500])
+                    tool_result_data = {
+                        "result": result_preview[:500],
+                        "tool_name": tool_name,
+                        "duration_ms": elapsed_ms,
+                        "error_type": error_type,
+                    }
+                    on_tool_result(tool_result_data)
 
                 tool_result_msg = {
                     "role": "tool",

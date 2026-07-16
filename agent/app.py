@@ -54,6 +54,22 @@ class WebStreamHandler(StreamHandler):
         # 只用 callback 路径，不用 transcript 订阅（避免重复事件）
         self._tool_callbacks = True
 
+        # ── 订阅审核事件 ──
+        try:
+            from .auditor import get_auditor
+            auditor = get_auditor()
+            auditor.on_audit(self._on_audit_event)
+        except Exception:
+            pass
+
+    def _on_audit_event(self, audit_result):
+        """审核事件 → SSE 推送。"""
+        try:
+            d = audit_result.to_dict()
+            self.web_server.push_sse("audit", d)
+        except Exception:
+            pass
+
     def on_text(self, text: str) -> None:
         self.web_server.push_sse("text", {"delta": text})
 
@@ -78,14 +94,25 @@ class WebStreamHandler(StreamHandler):
             "file_path": path, "args_preview": extra,
         })
 
-    def on_tool_result(self, result: str) -> None:
-        name = self._tool_queue.pop(0) if self._tool_queue else self._tool_name
-        is_err = any(k in result[:100].lower() for k in ("error", "错误", "失败", "❌"))
+    def on_tool_result(self, result_data: dict | str) -> None:
+        """处理工具结果（支持新旧两种格式）。"""
+        if isinstance(result_data, dict):
+            name = result_data.get("tool_name", self._tool_name)
+            result_str = result_data.get("result", "") or ""
+            duration_ms = result_data.get("duration_ms", 0)
+            error_type = result_data.get("error_type", "")
+        else:
+            name = self._tool_queue.pop(0) if self._tool_queue else self._tool_name
+            result_str = result_data or ""
+            duration_ms = 0
+            error_type = ""
+
+        is_err = bool(error_type) or any(k in result_str[:100].lower() for k in ("error", "错误", "失败", "❌"))
         self.web_server.push_sse("tool", {
             "subtype": "result", "tool_name": name,
             "status": "error" if is_err else "done",
-            "result": (result or "")[:500],
-            "duration_ms": 0,
+            "result": result_str[:500],
+            "duration_ms": duration_ms,
         })
 
     def on_error(self, error: str) -> None:
@@ -207,6 +234,18 @@ class AgentApp:
         self._think_start = time.time()
         self.web_server.push_sse("session", {"subtype": "start"})
 
+        # 看门狗：10 分钟自动释放 busy，防止卡死
+        def _watchdog():
+            import time as _t
+            _t.sleep(600)
+            with self._lock:
+                if self.busy:
+                    self.busy = False
+                    self.web_server.push_sse("error", {"message": "⏱ 执行超时 (600s)，自动终止"})
+                    self.web_server.push_sse("session", {"subtype": "end"})
+
+        threading.Thread(target=_watchdog, daemon=True).start()
+
         def _run():
             try:
                 transcript = self.agent.transcript if self.agent else None
@@ -215,7 +254,6 @@ class AgentApp:
             except Exception as e:
                 self.web_server.push_sse("error", {"message": str(e)})
             finally:
-                # 思考耗时
                 elapsed = time.time() - self._think_start
                 if elapsed >= 1.0:
                     unit = "s" if elapsed < 60 else "m"

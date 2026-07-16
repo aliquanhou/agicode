@@ -260,6 +260,40 @@ class WebServer:
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
+        @app.get("/api/probe/events")
+        async def api_probe_events(limit: int = 50, error_only: bool = False):
+            """探针详细事件 API。"""
+            try:
+                from probe import get_probe
+                p = get_probe()
+                if error_only:
+                    events = p.get_errors(limit)
+                else:
+                    events = p.get_recent_events(limit)
+                return {"status": "ok", "events": events, "total": len(events)}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
+        # ══ 审核 API ══
+
+        @app.get("/api/audit/stats")
+        async def api_audit_stats():
+            """审核统计。"""
+            try:
+                from .auditor import get_auditor
+                return {"status": "ok", "stats": get_auditor().get_stats()}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
+        @app.get("/api/audit/report")
+        async def api_audit_report():
+            """审核文本报告。"""
+            try:
+                from .auditor import get_auditor
+                return {"status": "ok", "report": get_auditor().get_report()}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
         @app.get("/api/health")
         async def api_health():
             return {"status": "ok", "port": self.port}
