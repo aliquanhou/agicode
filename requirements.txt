@@ -22,8 +22,7 @@ pygetwindow>=0.0.9
 # 构建
 pyinstaller>=6.0.0
 
-# Monaco Editor 集成
-tkwebview2>=1.0.0
+# Web 服务器（Monaco Editor 前端）
 sse-starlette>=0.2.0
 
 # 开发

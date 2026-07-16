@@ -1,7 +1,7 @@
-"""web_server — FastAPI 本地服务器，为 Monaco Editor 提供后端服务。
+"""web_server — FastAPI 本地服务器，网页版 AgiCode 后端。
 
 启动时绑定随机端口，通过 SSE 推送流式事件，提供 REST API。
-在守护线程中运行 uvicorn，与 customtkinter GUI 共存。
+在守护线程中运行 uvicorn。
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import json
 import os
 import socket
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -20,64 +21,38 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-# ── 前端静态文件目录 ──
+
 EDITOR_DIR = Path(__file__).parent / "editor"
 
-
-# ── 请求模型 ──
 
 class SendBody(BaseModel):
     text: str
 
 
-class DiffBody(BaseModel):
-    diff: str
-
-
-# ── Unified Diff 解析 ──
-
 def parse_unified_diff(diff_text: str) -> dict:
-    """解析 Unified Diff 文本，返回 original 和 modified 内容。
-
-    Args:
-        diff_text: 完整的 unified diff 字符串（含 ---/+++ 头）
-
-    Returns:
-        {"original": str, "modified": str}
-    """
+    """解析 Unified Diff 文本，返回 original 和 modified 内容。"""
     original_lines: list[str] = []
     modified_lines: list[str] = []
-
     for line in diff_text.split("\n"):
         if line.startswith("--- ") or line.startswith("+++ ") or line.startswith("@@ "):
             continue
-        if line.startswith("\\ "):  # No newline at end of file
+        if line.startswith("\\ "):
             continue
         if line.startswith("-"):
             original_lines.append(line[1:])
         elif line.startswith("+"):
             modified_lines.append(line[1:])
         else:
-            original_lines.append(line[1:] if line.startswith(" ") else line)
-            modified_lines.append(line[1:] if line.startswith(" ") else line)
+            ctx = line[1:] if line.startswith(" ") else line
+            original_lines.append(ctx)
+            modified_lines.append(ctx)
+    return {"original": "\n".join(original_lines), "modified": "\n".join(modified_lines)}
 
-    return {
-        "original": "\n".join(original_lines),
-        "modified": "\n".join(modified_lines),
-    }
-
-
-# ── WebServer ──
 
 class WebServer:
-    """FastAPI 本地服务器 —— 为 Monaco Editor 提供后端 API 和静态文件服务。
+    """FastAPI 本地服务器 —— 网页版 AgiCode 后端。
 
-    用法:
-        server = WebServer(agent_app)
-        port = server.start()
-        print(server.get_url())
-        # ...
-        server.stop()
+    通过 SSE 推送 Agent 事件到浏览器，通过 REST API 接收用户输入。
     """
 
     def __init__(self, agent_app=None):
@@ -89,39 +64,27 @@ class WebServer:
         self._sse_clients: list[asyncio.Queue] = []
         self._sse_lock = threading.Lock()
 
-        self.app = FastAPI(title="AgiCode Monaco Server")
+        self.app = FastAPI(title="AgiCode Web")
         self._register_routes()
 
     def _register_routes(self):
         app = self.app
 
-        # ── 静态文件 ──
+        # ══ 首页 ══
 
         @app.get("/")
         async def serve_index():
-            """提供 Monaco Editor 主页面。"""
+            """提供主页面。"""
             index_path = EDITOR_DIR / "index.html"
             if not index_path.exists():
-                return HTMLResponse("<h1>AgiCode Editor</h1><p>index.html not found.</p>", status_code=404)
+                return HTMLResponse("<h1>AgiCode</h1><p>Frontend not found.</p>", status_code=404)
             return FileResponse(str(index_path))
 
-        @app.get("/{filename:path}")
-        async def serve_static(filename: str):
-            """提供 editor/ 目录下的静态文件。"""
-            # 安全路径检查
-            file_path = EDITOR_DIR / filename
-            file_path = file_path.resolve()
-            if not str(file_path).startswith(str(EDITOR_DIR.resolve())):
-                return HTMLResponse("Forbidden", status_code=403)
-            if not file_path.exists() or not file_path.is_file():
-                return HTMLResponse("Not Found", status_code=404)
-            return FileResponse(str(file_path))
-
-        # ── SSE 流式输出 ──
+        # ══ SSE 流式输出 ══
 
         @app.get("/api/stream")
         async def sse_stream(request: Request):
-            """SSE 端点：推送流式文本事件给前端 Monaco Editor。"""
+            """SSE 端点：推送 Agent 事件给前端。"""
             queue: asyncio.Queue = asyncio.Queue()
             with self._sse_lock:
                 self._sse_clients.append(queue)
@@ -134,10 +97,9 @@ class WebServer:
                         try:
                             data = await asyncio.wait_for(queue.get(), timeout=30.0)
                         except asyncio.TimeoutError:
-                            yield f": keepalive\n\n"
+                            yield ": keepalive\n\n"
                             continue
-                        if data is None:  # 关闭信号
-                            yield f"event: close\ndata: \n\n"
+                        if data is None:
                             break
                         event_type = data.get("type", "message")
                         payload = json.dumps(data.get("payload", {}))
@@ -149,89 +111,107 @@ class WebServer:
 
             return EventSourceResponse(event_generator())
 
-        # ── REST API ──
+        # ══ REST API ══
 
         @app.post("/api/send")
         async def api_send(body: SendBody):
-            """接收用户消息并转发给 Agent。"""
+            """发送用户消息给 Agent。"""
             if not self.agent_app:
                 return {"status": "error", "message": "Agent not initialized"}
-            text = body.text
-            if not text.strip():
+            text = body.text.strip()
+            if not text:
                 return {"status": "error", "message": "Empty message"}
-            # 在主线程中发送（线程安全）
             if hasattr(self.agent_app, '_send_text'):
                 self.agent_app.after_idle(lambda: self.agent_app._send_text(text))
             return {"status": "ok"}
 
+        @app.post("/api/stop")
+        async def api_stop():
+            """终止当前 Agent 执行。"""
+            if self.agent_app and hasattr(self.agent_app, '_stop_agent'):
+                self.agent_app.after_idle(self.agent_app._stop_agent)
+            return {"status": "ok"}
+
+        @app.post("/api/clear")
+        async def api_clear():
+            """清空对话。"""
+            if self.agent_app and hasattr(self.agent_app, '_clear_chat'):
+                self.agent_app.after_idle(self.agent_app._clear_chat)
+            return {"status": "ok"}
+
+        @app.post("/api/retry")
+        async def api_retry():
+            """重试上次输入。"""
+            if self.agent_app and hasattr(self.agent_app, '_retry_last'):
+                self.agent_app.after_idle(self.agent_app._retry_last)
+            return {"status": "ok"}
+
         @app.post("/api/diff")
-        async def api_diff(body: DiffBody):
-            """解析 Unified Diff 并返回 original/modified 内容。"""
+        async def api_diff(body: dict):
+            """解析 Unified Diff。"""
             try:
-                result = parse_unified_diff(body.diff)
+                result = parse_unified_diff(body.get("diff", ""))
                 return {"status": "ok", **result}
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
         @app.get("/api/context")
         async def api_context():
-            """返回当前上下文/状态信息。"""
+            """返回上下文信息。"""
             if not self.agent_app or not self.agent_app.agent:
-                return {"busy": False, "provider": "", "model": "", "workflow": {}}
-            agent = self.agent_app.agent
-            workflow = agent.workflow.to_dict() if agent.workflow else {}
+                return {"busy": False, "provider": "", "model": ""}
             return {
                 "busy": self.agent_app.busy,
                 "provider": self.agent_app.provider_name,
                 "model": self.agent_app.model,
-                "workflow": workflow,
             }
 
-        @app.get("/api/history")
-        async def api_history():
-            """返回对话历史。"""
-            if not self.agent_app or not self.agent_app.agent:
-                return {"messages": []}
-            return {"messages": self.agent_app.agent.messages}
+        @app.get("/api/tools")
+        async def api_tools():
+            """返回工具状态。"""
+            if not self.agent_app:
+                return {"tools": {}}
+            return {"tools": getattr(self.agent_app, 'tool_status', {})}
 
         @app.get("/api/health")
         async def api_health():
             return {"status": "ok", "port": self.port}
 
+        # ══ 静态文件（catch-all，必须在 API 路由之后）══
+
+        @app.get("/{filename:path}")
+        async def serve_static(filename: str):
+            """提供 editor/ 下的静态文件。"""
+            file_path = (EDITOR_DIR / filename).resolve()
+            if not str(file_path).startswith(str(EDITOR_DIR.resolve())):
+                return HTMLResponse("Forbidden", status_code=403)
+            if not file_path.exists() or not file_path.is_file():
+                return HTMLResponse("Not Found", status_code=404)
+            return FileResponse(str(file_path))
+
     # ── 生命周期 ──
 
     def start(self) -> int:
-        """在随机端口上以守护线程启动 uvicorn。
-
-        Returns:
-            绑定的端口号
-        """
+        """在随机端口上以守护线程启动 uvicorn。"""
         self.port = _find_free_port()
         config = uvicorn.Config(
-            self.app,
-            host=self.host,
-            port=self.port,
-            log_level="warning",
-            access_log=False,
+            self.app, host=self.host, port=self.port,
+            log_level="warning", access_log=False,
         )
         self._server = uvicorn.Server(config=config)
         self._thread = threading.Thread(
-            target=self._server.run,
-            daemon=True,
+            target=self._server.run, daemon=True,
             name="agicode-web-server",
         )
         self._thread.start()
         return self.port
 
     def stop(self):
-        """优雅关闭服务器。"""
-        # 通知所有 SSE 客户端断开
+        """关闭服务器。"""
         with self._sse_lock:
-            for queue in self._sse_clients:
-                try:
-                    queue.put_nowait(None)
-                except Exception:
-                    pass
+            for q in self._sse_clients:
+                try: q.put_nowait(None)
+                except: pass
             self._sse_clients.clear()
         if self._server:
             self._server.should_exit = True
@@ -241,27 +221,17 @@ class WebServer:
     def get_url(self) -> str:
         return f"http://{self.host}:{self.port}"
 
-    # ── SSE 推送 ──
-
     def push_sse(self, event_type: str, payload: Any):
-        """广播事件给所有连接的 SSE 客户端。
-
-        Args:
-            event_type: 事件类型（text, tool_start, tool_result 等）
-            payload: 事件负载（dict）
-        """
+        """广播事件到所有 SSE 客户端。"""
         with self._sse_lock:
-            for queue in self._sse_clients:
+            for q in self._sse_clients:
                 try:
-                    queue.put_nowait({"type": event_type, "payload": payload})
+                    q.put_nowait({"type": event_type, "payload": payload})
                 except asyncio.QueueFull:
                     pass
 
 
-# ── 工具函数 ──
-
 def _find_free_port() -> int:
-    """查找系统空闲端口。"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]

@@ -3,25 +3,110 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgiCode Editor</title>
+<title>AgiCode Web</title>
 <link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 </head>
 <body>
   <div id="app">
-    <!-- Chat Editor (main) -->
-    <div id="chat-container" class="active">
-      <div id="chat-editor"></div>
-    </div>
-
-    <!-- Diff Editor (hidden by default) -->
-    <div id="diff-container" class="hidden">
-      <div id="diff-toolbar">
-        <span id="diff-filepath"></span>
-        <div id="diff-actions">
-          <button id="diff-close-btn" onclick="AgiCodeBridge.closeDiff()">✕ 关闭对比</button>
+    <!-- ═══ Dashboard ═══ -->
+    <div id="dashboard">
+      <div class="dash-left">
+        <div class="brand">AgiCode</div>
+        <div class="status" id="status-text">Idle</div>
+      </div>
+      <div class="dash-center">
+        <div class="stat">
+          <span class="stat-label">Provider</span>
+          <span class="stat-value" id="provider-label">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Context</span>
+          <span class="stat-value" id="ctx-label">0%</span>
         </div>
       </div>
-      <div id="diff-editor"></div>
+      <div class="dash-right">
+        <button class="btn" onclick="clearChat()" title="清空对话">🗑 Clear</button>
+        <button class="btn" onclick="openSettings()" title="设置">⚙ Settings</button>
+      </div>
+      <div class="ctx-bar-wrap">
+        <div class="ctx-bar" id="ctx-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- ═══ Main Area ═══ -->
+    <div id="main">
+      <!-- Chat -->
+      <div id="chat-area">
+        <div id="chat-container" class="active">
+          <div id="chat-editor"></div>
+          <div id="scroll-indicator" onclick="scrollToBottom()">↓ 新消息</div>
+        </div>
+        <!-- Diff -->
+        <div id="diff-container" class="hidden">
+          <div id="diff-toolbar">
+            <span id="diff-filepath"></span>
+            <button id="diff-close-btn" onclick="closeDiff()">✕ 关闭</button>
+          </div>
+          <div id="diff-editor"></div>
+        </div>
+      </div>
+
+      <!-- ═══ Tool Panel ═══ -->
+      <div id="tool-panel">
+        <div class="panel-tabs">
+          <button class="tab active" data-tab="tools">🛠 工具</button>
+          <button class="tab" data-tab="log">📋 日志</button>
+        </div>
+        <div id="tab-tools" class="tab-content active">
+          <!-- Populated by JS -->
+        </div>
+        <div id="tab-log" class="tab-content">
+          <div id="activity-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Input Area ═══ -->
+    <div id="input-area">
+      <div id="action-bar">
+        <button class="action-btn stop" onclick="stopAgent()">⏹ 终止</button>
+        <button class="action-btn" onclick="retryLast()">🔄 重试</button>
+      </div>
+      <div id="input-row">
+        <textarea id="input-box" rows="2" placeholder="输入指令，Enter 发送 (Ctrl+Enter 换行)"></textarea>
+        <button id="send-btn" onclick="sendMessage()">发送</button>
+      </div>
+    </div>
+
+    <!-- ═══ Workflow Bar ═══ -->
+    <div id="workflow-bar">
+      <span id="wf-label">⏳ 等待任务...</span>
+      <div class="wf-progress-wrap">
+        <div class="wf-progress" id="wf-progress" style="width:0%"></div>
+      </div>
+      <span id="wf-count">0/0</span>
+    </div>
+  </div>
+
+  <!-- ═══ Settings Modal ═══ -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>⚙ 设置</h2>
+      <label>LLM 提供商</label>
+      <select id="settings-provider">
+        <option>Anthropic Claude</option>
+        <option>OpenAI</option>
+        <option>DeepSeek</option>
+      </select>
+      <label>API 密钥</label>
+      <input type="password" id="settings-key" placeholder="sk-...">
+      <label>模型</label>
+      <input type="text" id="settings-model" placeholder="claude-sonnet-4-20250514">
+      <div class="modal-btns">
+        <button onclick="closeSettings()">取消</button>
+        <button onclick="saveSettings()" class="primary">保存</button>
+      </div>
     </div>
   </div>
 

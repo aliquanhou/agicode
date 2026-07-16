@@ -1,132 +1,98 @@
-/* AgiCode Monaco Editor Dark Theme
-   Matches existing customtkinter dark theme:
-   - Background: #1e1e1e, Text: #e0e0e0
-   - Accents match app.py color constants */
+/* AgiCode Web — Full dark-theme UI */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#1e1e1e;color:#e0e0e0;font-family:Consolas,'Microsoft YaHei',monospace;font-size:13px}
+#app{width:100%;height:100%;display:flex;flex-direction:column}
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* ═══ Dashboard ═══ */
+#dashboard{background:#1a1a2e;display:flex;flex-wrap:wrap;align-items:center;padding:6px 16px;position:relative;min-height:56px}
+.dash-left{display:flex;align-items:center;gap:12px}
+.brand{font-size:20px;font-weight:bold;color:#00d4ff}
+.status{font-size:11px;color:#4CAF50}
+.dash-center{display:flex;gap:24px;margin-left:24px}
+.stat{display:flex;flex-direction:column}
+.stat-label{font-size:9px;color:#666}
+.stat-value{font-size:12px;color:#64B5F6}
+.dash-right{margin-left:auto;display:flex;gap:4px}
+.btn{background:#2a2a4a;color:#e0e0e0;border:none;padding:4px 10px;font-size:11px;cursor:pointer;border-radius:4px;font-family:inherit}
+.btn:hover{background:#3a3a5a}
+.ctx-bar-wrap{width:100%;height:3px;background:#333;border-radius:2px;margin-top:4px;overflow:hidden}
+.ctx-bar{height:100%;background:#4CAF50;transition:width .5s,background .3s}
 
-html, body {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: #1e1e1e;
-  color: #e0e0e0;
-  font-family: 'Consolas', 'Microsoft YaHei', monospace;
-  font-size: 13px;
-}
+/* ═══ Main Layout ═══ */
+#main{flex:1;display:flex;overflow:hidden}
+#chat-area{flex:1;display:flex;flex-direction:column;position:relative;min-width:0}
+#tool-panel{width:280px;background:#1a1a1a;border-left:1px solid #333;display:flex;flex-direction:column}
 
-#app {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
+/* ═══ Chat / Diff ═══ */
+#chat-container,#diff-container{flex:1;display:flex;flex-direction:column}
+#chat-container.hidden{display:none}
+#diff-container.hidden{display:none}
+#chat-editor{flex:1;min-height:0}
+#diff-editor{flex:1;min-height:0}
+#diff-toolbar{display:flex;align-items:center;justify-content:space-between;padding:4px 12px;background:#2a2a2a;border-bottom:1px solid #333;min-height:32px}
+#diff-filepath{font-size:12px;color:#64B5F6}
+#diff-close-btn{background:#5a2020;color:#e0e0e0;border:none;padding:3px 10px;font-size:11px;cursor:pointer;border-radius:3px;font-family:inherit}
+#diff-close-btn:hover{background:#7a3030}
 
-/* ── Chat Container ── */
+/* ═══ Scroll Indicator ═══ */
+#scroll-indicator{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:#2a2a3a;color:#FFC107;padding:4px 14px;border-radius:8px;font-size:11px;cursor:pointer;z-index:100;display:none;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#scroll-indicator:hover{background:#3a3a4a}
 
-#chat-container {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
+/* ═══ Tool Panel ═══ */
+.panel-tabs{display:flex;border-bottom:1px solid #333}
+.panel-tabs .tab{flex:1;padding:8px;background:transparent;color:#888;border:none;cursor:pointer;font-size:11px;font-family:inherit}
+.panel-tabs .tab.active{color:#e0e0e0;border-bottom:2px solid #00d4ff;background:#222}
+.tab-content{display:none;flex:1;overflow-y:auto;padding:8px}
+.tab-content.active{display:flex;flex-direction:column}
 
-#chat-container.active {
-  display: block;
-}
+/* Tool cards */
+.tool-cat{font-size:11px;font-weight:bold;color:#888;padding:6px 4px 2px}
+.tool-row{display:flex;gap:4px;padding:2px 0}
+.tool-card{flex:1;display:flex;align-items:center;gap:6px;background:#2a2a2a;border-radius:4px;padding:4px 8px;font-size:11px;min-height:28px}
+.tool-dot{font-size:9px;color:#555;width:10px}
+.tool-dot.running{color:#FFC107}
+.tool-dot.done{color:#4CAF50}
+.tool-dot.error{color:#F44336}
+.tool-name{font-weight:bold}
+.tool-desc{font-size:10px;color:#666;margin-left:auto}
 
-#chat-container.hidden {
-  display: none;
-}
+/* Activity log */
+#activity-log{font-size:11px;line-height:1.6;color:#888}
+.log-line{white-space:pre-wrap;word-break:break-all}
+.log-line.run{color:#FFC107}
+.log-line.done{color:#4CAF50}
+.log-line.err{color:#F44336}
 
-#chat-editor {
-  width: 100%;
-  height: 100%;
-}
+/* ═══ Input Area ═══ */
+#input-area{background:#1a1a1a;border-top:1px solid #333;padding:6px 12px}
+#action-bar{display:flex;gap:4px;margin-bottom:4px}
+.action-btn{background:#333;color:#e0e0e0;border:none;padding:3px 10px;font-size:10px;cursor:pointer;border-radius:3px;font-family:inherit}
+.action-btn:hover{background:#444}
+.action-btn.stop{background:#5a2020}
+.action-btn.stop:hover{background:#7a3030}
+#input-row{display:flex;gap:8px}
+#input-box{flex:1;background:#2a2a2a;color:#e0e0e0;border:1px solid #444;border-radius:4px;padding:8px 12px;font-size:13px;font-family:Consolas,'Microsoft YaHei',monospace;resize:none;outline:none;min-height:40px}
+#input-box:focus{border-color:#00d4ff}
+#send-btn{background:#1565C0;color:#e0e0e0;border:none;padding:8px 20px;font-size:13px;cursor:pointer;border-radius:4px;font-family:inherit;min-width:70px}
+#send-btn:hover{background:#1976D2}
+#send-btn:disabled{background:#444;cursor:not-allowed}
 
-/* ── Diff Container ── */
+/* ═══ Workflow Bar ═══ */
+#workflow-bar{display:flex;align-items:center;gap:12px;background:#15152a;padding:3px 14px;min-height:26px;font-size:11px}
+#wf-label{color:#888;white-space:nowrap}
+.wf-progress-wrap{flex:1;height:3px;background:#222;border-radius:2px;overflow:hidden}
+.wf-progress{height:100%;background:#FF9800;transition:width .3s}
 
-#diff-container {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-#diff-container.hidden {
-  display: none;
-}
-
-#diff-container.active {
-  display: flex;
-}
-
-#diff-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 12px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #333;
-  min-height: 32px;
-}
-
-#diff-filepath {
-  font-size: 12px;
-  color: #64B5F6;
-  font-family: 'Consolas', monospace;
-}
-
-#diff-close-btn {
-  background: #5a2020;
-  color: #e0e0e0;
-  border: none;
-  padding: 3px 10px;
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: 3px;
-  font-family: 'Consolas', monospace;
-}
-
-#diff-close-btn:hover {
-  background: #7a3030;
-}
-
-#diff-editor {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-}
-
-/* ── Scroll Indicator ── */
-
-#scroll-indicator {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #2a2a3a;
-  color: #FFC107;
-  padding: 4px 14px;
-  border-radius: 8px;
-  font-size: 11px;
-  cursor: pointer;
-  z-index: 100;
-  display: none;
-  font-family: 'Consolas', monospace;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-#scroll-indicator.visible {
-  display: block;
-}
-
-#scroll-indicator:hover {
-  background: #3a3a4a;
-}
+/* ═══ Settings Modal ═══ */
+.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal.hidden{display:none}
+.modal-content{background:#2a2a2a;padding:24px;border-radius:8px;min-width:400px;max-width:500px}
+.modal-content h2{margin-bottom:16px;font-size:16px}
+.modal-content label{display:block;font-size:11px;color:#888;margin:8px 0 4px}
+.modal-content input,.modal-content select{width:100%;padding:8px;background:#1e1e1e;color:#e0e0e0;border:1px solid #444;border-radius:4px;font-size:13px;font-family:inherit;outline:none}
+.modal-content input:focus,.modal-content select:focus{border-color:#00d4ff}
+.modal-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.modal-btns button{background:#555;color:#e0e0e0;border:none;padding:6px 16px;cursor:pointer;border-radius:4px;font-family:inherit}
+.modal-btns button:hover{background:#666}
+.modal-btns button.primary{background:#1565C0}
+.modal-btns button.primary:hover{background:#1976D2}
