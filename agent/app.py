@@ -113,8 +113,8 @@ class AgentApp:
         self.api_key: str = ""
         self.model: str = "deepseek-chat"
         self.base_url: str = ""
-        self.busy = False
-        self._lock = threading.Lock()
+        self.busy: bool = False
+        self._lock: threading.Lock = threading.Lock()
         self._think_start: float = 0.0
 
         # 加载配置
@@ -140,10 +140,10 @@ class AgentApp:
             self.web_server.stop()
             print("再见。")
 
-    def _config_path(self):
+    def _config_path(self) -> str:
         return os.path.join(os.path.dirname(__file__), "..", "config.json")
 
-    def _load_config(self):
+    def _load_config(self) -> None:
         p = self._config_path()
         if os.path.exists(p):
             try:
@@ -153,11 +153,11 @@ class AgentApp:
                 self.api_key = d.get("api_key", "")
                 self.model = d.get("model", "deepseek-chat")
                 self.base_url = d.get("base_url", "")
-            except Exception:
-                pass
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"[config] 加载失败: {e}")
         self._init_agent()
 
-    def _save_config(self):
+    def _save_config(self) -> None:
         try:
             with open(self._config_path(), "w", encoding="utf-8") as f:
                 json.dump({
@@ -166,10 +166,10 @@ class AgentApp:
                     "model": self.model,
                     "base_url": self.base_url,
                 }, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except (IOError, PermissionError) as e:
+            print(f"[config] 保存失败: {e}")
 
-    def _init_agent(self):
+    def _init_agent(self) -> None:
         if not self.api_key:
             self.agent = None
             return

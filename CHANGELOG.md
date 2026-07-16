@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.0 (2026-07-16) — Code Quality & SSE Stability
+
+### 代码质量改进
+- 🔧 `web_server.py`: 修复裸 `except: pass` → 显式异常捕获
+- 🔧 `app.py`: 添加完整类型注解 (`_config_path`, `_load_config`, `_save_config`, `_init_agent`)
+- 🔧 `app.py`: 添加 `busy`, `_lock` 类型注解
+- 🔧 `web_server.py`: 添加 `agent_app`, `_sse_lock` 类型注解
+
+### SSE 稳定增强
+- 🔄 **自动重连**: 指数退避（1s→2s→4s→...→30s 上限）
+- 📶 **连接状态指示**: 标题栏圆点绿色=已连接，橙色闪烁=重连中
+- 🛡️ **断线保护**: 网络中断后自动恢复，不丢消息
+
+### 版本
+- 从 main `9cb2ef1` 创建 `release-v2.2.0`
+
 ## 2.1.0 (2026-07-16) — Release Branch
 
 - 从 v2.0.0 创建独立发布分支 release-v2.1.0

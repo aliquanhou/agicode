@@ -463,9 +463,32 @@ function addErr(text){try{autoSave()}catch(e){}
 // ══════════════════════════════════════════════════
 // SSE
 // ══════════════════════════════════════════════════
+// ─── SSE 连接（带自动重连 + 状态指示）───
+var _sseRetry=0, _sseTimer=null;
+
 function connectSSE(){
-  if(S.sse) S.sse.close();
+  if(S.sse){try{S.sse.close()}catch(e){}}
   S.sse=new EventSource('/api/stream');
+  _sseRetry=0;
+
+  // 连接状态
+  S.sse.onopen=function(){
+    _sseRetry=0;
+    var dot=$('hd-s')?.querySelector('.hd-dot');
+    if(dot){dot.style.background='var(--accent4)';dot.style.animation='none';}
+  };
+
+  S.sse.onerror=function(){
+    S.sse.close();
+    _sseRetry++;
+    // 指数退避重连：1s, 2s, 4s, 8s... 最大 30s
+    var delay=Math.min(1000*Math.pow(2,_sseRetry),30000);
+    if(_sseTimer) clearTimeout(_sseTimer);
+    _sseTimer=setTimeout(function(){connectSSE()},delay);
+    // 状态指示
+    var dot=$('hd-s')?.querySelector('.hd-dot');
+    if(dot&&_sseRetry>2){dot.style.background='var(--accent5)';dot.style.animation='pi 1s infinite';}
+  };
 
   S.sse.addEventListener('text',function(e){
     try{var d=JSON.parse(e.data);if(d.delta)addText(d.delta);}catch(x){}
@@ -503,7 +526,6 @@ function connectSSE(){
   S.sse.addEventListener('step',function(e){
     try{var d=JSON.parse(e.data);
       if(d.status&&d.step_name){updateWfStep(d.step_id||d.step_name,d.status,d.step_name,d.result||'');addEvent('step',d.status+' '+d.step_name);}
-      // Show step completion in chat
       if(d.status==='done'){var sep=div('step-sep step-done');sep.textContent='✔ 步骤 "'+(d.step_name||'')+'" 完成';msgs.appendChild(sep);scrollB();}
       if(d.status==='failed'){var sep=div('step-sep step-fail');sep.textContent='✗ 步骤 "'+(d.step_name||'')+'" 失败';msgs.appendChild(sep);scrollB();}
     }catch(x){}

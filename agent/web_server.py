@@ -56,7 +56,7 @@ class WebServer:
     通过 SSE 推送 Agent 事件到浏览器，通过 REST API 接收用户输入。
     """
 
-    def __init__(self, agent_app=None):
+    def __init__(self, agent_app: Any = None):
         self.agent_app = agent_app
         self.port: int = 0
         self.host: str = "127.0.0.1"
@@ -64,7 +64,7 @@ class WebServer:
         self._thread: threading.Thread | None = None
         # 使用 threading.Queue（线程安全，Agent 后台线程可写入）
         self._sse_queues: list[q_module.Queue] = []
-        self._sse_lock = threading.Lock()
+        self._sse_lock: threading.Lock = threading.Lock()
 
         self.app = FastAPI(title="AgiCode Web")
         self._register_routes()
@@ -289,8 +289,10 @@ class WebServer:
         """关闭服务器。"""
         with self._sse_lock:
             for q in self._sse_queues:
-                try: q.put_nowait(None)
-                except: pass
+                try:
+                    q.put_nowait(None)
+                except Exception:
+                    pass
             self._sse_queues.clear()
         if self._server:
             self._server.should_exit = True
