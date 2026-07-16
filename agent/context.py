@@ -113,7 +113,12 @@ def truncate_tool_results(messages: list[dict]) -> list[dict]:
 
 
 def compact_messages(messages: list[dict]) -> list[dict]:
-    """Compact content of older messages beyond the recent window."""
+    """Compact content of older messages beyond the recent window.
+
+    CRITICAL: preserves tool_call/tool_result pairing integrity.
+    If an assistant message's tool_calls are stripped, the corresponding
+    tool_result messages must also be removed to avoid 400 errors.
+    """
     if len(messages) <= KEEP_RECENT_COMPACT * 2:
         return messages
 
@@ -129,11 +134,29 @@ def compact_messages(messages: list[dict]) -> list[dict]:
     if len(keep_indices) == len(messages):
         return messages
 
+    # Collect IDs of tool_calls being compacted (so we can remove their results too)
+    stripped_call_ids: set[str] = set()
+    for i, msg in enumerate(messages):
+        if i in keep_indices:
+            continue
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                tid = tc.get("id", "") if isinstance(tc, dict) else ""
+                if tid:
+                    stripped_call_ids.add(tid)
+
     result = []
     for i, msg in enumerate(messages):
         if i in keep_indices:
             result.append(msg)
             continue
+
+        # Skip tool_result messages whose tool_call was compacted
+        if msg.get("role") == "tool":
+            tid = msg.get("tool_call_id", "")
+            if tid in stripped_call_ids:
+                continue  # remove orphan tool_result to keep pairing intact
+
         # Compact this message
         compacted = dict(msg)
         content = msg.get("content", "")
