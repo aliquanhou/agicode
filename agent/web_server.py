@@ -318,8 +318,18 @@ class WebServer:
     # ── 生命周期 ──
 
     def start(self) -> int:
-        """在随机端口上以守护线程启动 uvicorn。"""
-        self.port = _find_free_port()
+        """在随机端口上以守护线程启动 uvicorn。
+
+        支持环境变量 AGICODE_PORT 固定端口（用于反向代理部署）。
+        """
+        env_port = os.environ.get("AGICODE_PORT", "")
+        if env_port:
+            try:
+                self.port = int(env_port)
+            except ValueError:
+                self.port = _find_free_port()
+        else:
+            self.port = _find_free_port()
         config = uvicorn.Config(
             self.app, host=self.host, port=self.port,
             log_level="warning", access_log=False,
