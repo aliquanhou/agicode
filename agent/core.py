@@ -368,6 +368,33 @@ class Agent:
 
         return final_response
 
+    @staticmethod
+    def _sanitize_messages(messages: list[dict]) -> None:
+        """清理消息历史：移除孤立的 tool_calls（有 tool_calls 但缺少对应 tool_result）。
+
+        防止 400 错误: "An assistant message with 'tool_calls' must be
+        followed by tool messages responding to each 'tool_call_id'."
+        """
+        i = 0
+        while i < len(messages):
+            msg = messages[i]
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                tc_count = len(msg["tool_calls"])
+                # 数后面连续有几个 tool 消息
+                j = i + 1
+                tool_count = 0
+                while j < len(messages) and messages[j].get("role") == "tool":
+                    tool_count += 1
+                    j += 1
+                # 如果 tool 消息不够，说明上下文压缩删掉了部分结果
+                if tool_count < tc_count:
+                    # 保留文本内容，移除 tool_calls
+                    del msg["tool_calls"]
+                    # 如果只有 tool_calls 没有文本，标记为系统消息
+                    if not msg.get("content"):
+                        msg["content"] = "[系统: 工具调用结果已丢失]"
+            i += 1
+
     # ── 流式 LLM 调用 ──
 
     def _stream_llm(self, system: str, messages: list[dict], tools: list[dict],
@@ -377,6 +404,9 @@ class Agent:
         Returns:
             {"content": str, "tool_calls": list[dict]}
         """
+        # 调用前清理消息，防止孤立 tool_calls 导致 400 错误
+        self._sanitize_messages(messages)
+
         collected_text = ""
         tool_calls: list[dict] = []
         tool_buffers: dict[str, dict] = {}
