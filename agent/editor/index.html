@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgiCode Editor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Chat Editor (main) -->
+    <div id="chat-container" class="active">
+      <div id="chat-editor"></div>
+    </div>
+
+    <!-- Diff Editor (hidden by default) -->
+    <div id="diff-container" class="hidden">
+      <div id="diff-toolbar">
+        <span id="diff-filepath"></span>
+        <div id="diff-actions">
+          <button id="diff-close-btn" onclick="AgiCodeBridge.closeDiff()">✕ 关闭对比</button>
+        </div>
+      </div>
+      <div id="diff-editor"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

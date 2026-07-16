@@ -23,6 +23,8 @@ from .watcher import get_watcher
 from .transcript import Transcript
 from .workflow import Workflow
 from .app_dialogs import CodeReviewDialog, ResearchDialog, SchedulerDialog, WatcherDialog
+from .web_server import WebServer
+from .monaco_widget import MonacoChatWidget
 
 
 # ── Color / style ──
@@ -280,11 +282,9 @@ class AgentApp(ctk.CTk):
         self._watchdog_armed: bool = False
         self._watchdog_warned: bool = False
         self._stop_requested: bool = False
-        self._highlight_pending: bool = False
         self._last_input: str = ""
         self._turn_total: int = 0
         self._turn_done: int = 0
-        self._chat_needs_scroll: bool = False
         self._think_buffer: str = ""
         self._think_header_shown: bool = False
 
@@ -296,10 +296,22 @@ class AgentApp(ctk.CTk):
         self._think_end_time: float = 0.0           # 思考结束时间
         self._thought_displayed: bool = False       # 是否已显示思考时间
 
+        # ── 启动本地 Web 服务器（Monaco Editor 后端）──
+        self.web_server = WebServer(agent_app=self)
+        self.web_server.start()
+
         self._build_ui()
         self._load_config()
         self._poll_queue()
         self.entry.focus()
+
+    def __del__(self):
+        """清理 Web 服务器资源。"""
+        if hasattr(self, 'web_server'):
+            try:
+                self.web_server.stop()
+            except Exception:
+                pass
 
     # ── UI ──
 
@@ -315,70 +327,9 @@ class AgentApp(ctk.CTk):
         self._build_workflow_bar()
 
         # ══ Main: Chat + Tool Panel ══
-        # Chat
-        chat_frame = ctk.CTkFrame(self)
-        chat_frame.grid(row=2, column=0, sticky="nsew", padx=(10, 2), pady=5)
-        chat_frame.grid_columnconfigure(0, weight=1)
-        chat_frame.grid_rowconfigure(0, weight=1)
-
-        self.chat = tk.Text(chat_frame, wrap="word", font=(FONT_MONO, 13),
-                            bg="#1e1e1e", fg="#e0e0e0", insertbackground="#e0e0e0",
-                            borderwidth=0, highlightthickness=0, padx=14, pady=12,
-                            state="disabled", relief="flat")
-        self.chat.grid(row=0, column=0, sticky="nsew")
-
-        # ── 滚动指示器（"N 条新消息 ↓" 浮层）──
-        self.scroll_indicator = ctk.CTkLabel(chat_frame, text="",
-                                              font=(FONT_MONO, 11, "bold"),
-                                              text_color="#FFC107", anchor="center",
-                                              fg_color="#2a2a3a", corner_radius=8,
-                                              cursor="hand2")
-        self.scroll_indicator.grid(row=0, column=0, sticky="s", pady=(0, 8), padx=20)
-        self.scroll_indicator.grid_remove()  # 默认隐藏
-        self.scroll_indicator.bind("<Button-1>", lambda e: self._scroll_to_bottom())
-
-        sb = ctk.CTkScrollbar(chat_frame, command=self._on_scroll)
-        sb.grid(row=0, column=1, sticky="ns")
-        self._orig_yscroll = None
-        self.chat.configure(yscrollcommand=lambda *a: self._on_scroll(*a))
-
-        # Chat tags
-        for tag, color, font in [
-            ("user", COLOR_USER, (FONT_FAMILY, 13, "bold")),
-            ("user_c", COLOR_USER, (FONT_MONO, 13)),
-            ("asst", COLOR_ASSISTANT, (FONT_MONO, 13)),
-            ("think", COLOR_THINKING, (FONT_MONO, 12)),
-            ("tool", COLOR_TOOL_NAME, (FONT_MONO, 12, "bold")),
-            ("tool_path", "#64B5F6", (FONT_MONO, 12)),
-            ("tool_r", COLOR_TOOL_RESULT, (FONT_MONO, 12)),
-            ("tool_meta", "#888", (FONT_MONO, 11)),
-            ("code", "#82AAFF", (FONT_MONO, 12)),
-            ("code_block", "#A8D8EA", (FONT_MONO, 12)),
-            ("err", COLOR_ERROR, (FONT_MONO, 12, "bold")),
-            ("sys", COLOR_SYSTEM, (FONT_FAMILY, 12)),
-            ("sep", COLOR_SEPARATOR, (FONT_MONO, 8)),
-            ("dim", "#666", (FONT_MONO, 11)),
-            ("num", "#F78C6C", (FONT_MONO, 12)),
-            # v1.0: Diff 渲染
-            ("diff_header", "#569CD6", (FONT_MONO, 11, "bold")),   # ---/+++ 文件头
-            ("diff_add", "#4CAF50", (FONT_MONO, 11)),               # 新增行 +
-            ("diff_del", "#F44336", (FONT_MONO, 11)),               # 删除行 -
-            ("diff_hunk", "#C792EA", (FONT_MONO, 11)),              # @@ 块标记
-            ("diff_info", "#888", (FONT_MONO, 11)),                 # 差异统计/上下文
-        ]:
-            self.chat.tag_config(tag, foreground=color, font=font)
-
-        # Code syntax highlighting tags
-        code_font = (FONT_MONO, 13)
-        for ctag, ccolor, cfont in [
-            ("code_kw", "#C792EA", code_font),
-            ("code_builtin", "#82AAFF", code_font),
-            ("code_str", "#C3E88D", code_font),
-            ("code_comment", "#676E95", (FONT_MONO, 12)),
-            ("code_num", "#F78C6C", code_font),
-        ]:
-            self.chat.tag_config(ctag, foreground=ccolor, font=cfont)
-
+        # Chat（Monaco Editor）
+        self.monaco = MonacoChatWidget(self, server_url=self.web_server.get_url())
+        self.monaco.grid(row=2, column=0, sticky="nsew", padx=(10, 2), pady=5)
         # ══ Tool Panel ══
         self._build_tool_panel()
 
@@ -895,7 +846,7 @@ class AgentApp(ctk.CTk):
     def _copy_chat(self):
         """一键复制全部对话/输出到剪贴板。"""
         try:
-            content = self.chat.get("1.0", "end-1c")
+            content = self.monaco.get_content()
             if not content.strip():
                 self._chat_line("没有可复制的内容", "dim")
                 return
@@ -909,44 +860,24 @@ class AgentApp(ctk.CTk):
 
     # ── v1.0：滚动管理 ──
 
-    def _is_scroll_at_bottom(self, tolerance: int = 30) -> bool:
-        """检测滚动条是否在底部（tolerance=30px 容忍）。"""
+    def _is_scroll_at_bottom(self) -> bool:
+        """通过 Monaco 查询滚动条是否在底部。"""
         try:
-            frac = self.chat.yview()[1]  # (top, bottom) fraction
-            return frac >= 1.0 - (tolerance / self.chat.winfo_height() if self.chat.winfo_height() > 0 else 0.02)
+            state = self.monaco.get_scroll_state()
+            return state.get("atBottom", True)
         except Exception:
             return True
 
-    def _on_scroll(self, *args):
-        """滚动回调：检测用户是否手动滚动到上方。"""
-        self._last_scroll_bottom = self._is_scroll_at_bottom()
-        if self._last_scroll_bottom:
-            self._new_msg_count = 0
-            self.scroll_indicator.grid_remove()
-        elif self._new_msg_count > 0:
-            self.scroll_indicator.grid()
-        # 转发给原始 yscrollcommand
-        if hasattr(self, '_orig_yscroll') and self._orig_yscroll:
-            self._orig_yscroll(*args)
-
     def _scroll_to_bottom(self):
         """滚动到底部并隐藏指示器。"""
-        self.chat.configure(state="normal")
-        self.chat.see("end")
-        self.chat.configure(state="disabled")
+        self.monaco.scroll_to_bottom()
         self._new_msg_count = 0
         self._user_scrolled_up = False
         self._last_scroll_bottom = True
-        self.scroll_indicator.grid_remove()
 
     def _update_scroll_indicator(self):
-        """更新滚动指示器显示。"""
-        if self._new_msg_count > 0 and not self._is_scroll_at_bottom():
-            self.scroll_indicator.configure(text=f"  ↓ {self._new_msg_count} 条新消息  ")
-            self.scroll_indicator.grid()
-        else:
-            self._new_msg_count = 0
-            self.scroll_indicator.grid_remove()
+        """滚动指示器由 Monaco 前端管理，此方法保留为兼容接口。"""
+        pass
 
     # ── Queue ──
 
@@ -996,11 +927,6 @@ class AgentApp(ctk.CTk):
         try:
             while True:
                 if processed >= 200:
-                    if self._chat_needs_scroll:
-                        self._chat_needs_scroll = False
-                        self.chat.configure(state="normal")
-                        self.chat.see("end")
-                        self.chat.configure(state="disabled")
                     self.update_idletasks()
                     self.after(1, self._poll_queue)
                     return
@@ -1009,13 +935,6 @@ class AgentApp(ctk.CTk):
                 processed += 1
         except queue.Empty:
             pass
-
-        # Batch-end scroll (throttled for streaming performance)
-        if self._chat_needs_scroll:
-            self._chat_needs_scroll = False
-            self.chat.configure(state="normal")
-            self.chat.see("end")
-            self.chat.configure(state="disabled")
 
         # ── Watchdog: detect stuck, show running duration ──
         if self.busy and self._watchdog_armed:
@@ -1158,160 +1077,43 @@ class AgentApp(ctk.CTk):
     # ── Chat Display ──
 
     def _chat_stream(self, text: str, tag: str, scroll: bool = True):
-        """流式文本渲染：检测 markdown 代码块、diff 标记并着色。"""
-        self.chat.configure(state="normal")
+        """流式文本渲染：通过 Monaco Editor 桥接显示。"""
+        # 样式映射表（tk tags → monaco styles）
+        style_map = {
+            "asst": "assistant", "user_c": "assistant",
+            "think": "thinking", "tool_r": "tool_result",
+            "tool": "tool", "err": "err", "sys": "sys",
+            "dim": "dim", "sep": "sep", "code": "code",
+        }
+        style = style_map.get(tag, "assistant")
+        self.monaco.append_text(text, style)
 
-        # 检测 diff 内容（工具结果中包含 diff 标记）
-        if tag == "tool_r" and "--- DIFF START ---" in text:
-            self._render_diff_stream(text)
-        # 检测代码围栏，用 code 标签渲染代码块内容
-        elif tag == "asst" and "```" in text:
-            self._render_markdown_stream(text, tag)
-        else:
-            self.chat.insert("end", text, tag)
-
-        self.chat.configure(state="disabled")
-
-        # 滚动和计数
-        if scroll:
-            self.chat.see("end")
-            self._last_scroll_bottom = True
-        else:
-            self._chat_needs_scroll = True
-
-        # 如果用户不在底部，累积未读数
-        if not self._is_scroll_at_bottom():
+        if not self._is_scroll_at_bottom() and scroll:
             new_lines = text.count("\n")
             self._new_msg_count += new_lines
             self._update_scroll_indicator()
 
-        self._schedule_highlight()
-
-    def _render_diff_stream(self, text: str):
-        """渲染 Unified Diff 内容：用颜色标记 +/-/@@ 行。"""
-        import re
-        start_marker = "--- DIFF START ---\n"
-        end_marker = "\n--- DIFF END ---"
-        start_idx = text.find(start_marker)
-        end_idx = text.find(end_marker)
-        if start_idx < 0 or end_idx < 0:
-            self.chat.insert("end", text, "tool_r")
-            return
-
-        # 前半段（diff 之前的文本）
-        before = text[:start_idx]
-        if before.strip():
-            self.chat.insert("end", before, "tool_r")
-
-        # diff 内容
-        diff_body = text[start_idx + len(start_marker):end_idx]
-        self.chat.insert("end", "\n")
-        self.chat.insert("end", "  ── 变更对比 ──\n", "diff_info")
-        for line in diff_body.split("\n"):
-            if line.startswith("+++") or line.startswith("---"):
-                self.chat.insert("end", f"  {line}\n", "diff_header")
-            elif line.startswith("@@"):
-                self.chat.insert("end", f"  {line}\n", "diff_hunk")
-            elif line.startswith("+"):
-                self.chat.insert("end", f"  {line}\n", "diff_add")
-            elif line.startswith("-"):
-                self.chat.insert("end", f"  {line}\n", "diff_del")
-            elif line.startswith("\\ "):
-                self.chat.insert("end", f"  {line}\n", "diff_info")
-            else:
-                self.chat.insert("end", f"  {line}\n", "dim")
-        self.chat.insert("end", "  ── 变更结束 ──\n", "diff_info")
-
-        # 后半段（diff 之后的文本）
-        after = text[end_idx + len(end_marker):]
-        if after.strip():
-            self.chat.insert("end", after, "tool_r")
-
     def _render_markdown_stream(self, text: str, tag: str):
-        """将流式文本中的代码围栏渲染为着色代码块。"""
-        import re
-        fence_re = re.compile(r'```(\w*)\n?(.*?)```', re.DOTALL)
-        last_end = 0
-        for m in fence_re.finditer(text):
-            before = text[last_end:m.start()]
-            if before:
-                self.chat.insert("end", before, tag)
-            lang = m.group(1) or ""
-            code = m.group(2)
-            if lang:
-                self.chat.insert("end", f"  [{lang}]\n", "dim")
-            for line in code.split("\n"):
-                self.chat.insert("end", f"  {line}\n", "code")
-            last_end = m.end()
-        remaining = text[last_end:]
-        if remaining:
-            self.chat.insert("end", remaining, tag)
+        """Monaco Editor 原生支持语法高亮，此方法不再需要。"""
+        self._chat_stream(text, tag)
 
     def _chat_line(self, text: str, tag: str = ""):
-        self.chat.configure(state="normal")
-        if tag:
-            self.chat.insert("end", text + "\n", tag)
-        else:
-            self.chat.insert("end", text + "\n")
-        self.chat.see("end")
-        self.chat.configure(state="disabled")
-        # 如果用户不在底部，累积未读数
+        style_map = {
+            "user": "user", "user_c": "assistant",
+            "asst": "assistant", "think": "thinking",
+            "tool": "tool", "tool_r": "tool_result",
+            "err": "err", "sys": "sys", "dim": "dim",
+            "sep": "sep", "code": "code",
+        }
+        style = style_map.get(tag, "assistant")
+        self.monaco.append_line(text, style)
         if not self._is_scroll_at_bottom():
             self._new_msg_count += 1
             self._update_scroll_indicator()
-        self._schedule_highlight()
-
-    def _schedule_highlight(self):
-        """Debounce syntax highlighting — wait 200ms after last input."""
-        if not self._highlight_pending:
-            self._highlight_pending = True
-            self.after(200, self._apply_highlight)
-
-    def _apply_highlight(self):
-        """Apply Python syntax highlighting to chat content via regex. Time-bounded."""
-        self._highlight_pending = False
-        try:
-            content = self.chat.get("1.0", "end-1c")
-            if not content or len(content) > 50000:  # skip if too large
-                return
-
-            self.chat.configure(state="normal")
-
-            # Clear old code tags
-            for tag in ("code_kw", "code_builtin", "code_str", "code_comment", "code_num"):
-                self.chat.tag_remove(tag, "1.0", "end")
-
-            # Compile patterns once
-            _re = __import__('re')
-            patterns = [
-                ("code_comment", _re.compile(r'#[^\n]*')),
-                ("code_str", _re.compile(r'""".*?"""|\'\'\'.*?\'\'\'|"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'')),
-                ("code_kw", _re.compile(r'\b(?:def|class|return|if|else|elif|for|while|import|from|as|try|except|finally|with|yield|lambda|pass|break|continue|and|or|not|in|is|None|True|False|raise|async|await|self|del|global|nonlocal|assert|match|case|__init__|__str__|__repr__)\b')),
-                ("code_num", _re.compile(r'\b\d+\.?\d*(?:[eE][+-]?\d+)?\b')),
-                ("code_builtin", _re.compile(r'\b(?:print|len|range|type|super|int|str|list|dict|set|tuple|open|input|isinstance|hasattr|getattr|setattr|map|filter|sorted|reversed|enumerate|zip|min|max|sum|any|all|abs|round|hex|bin|ord|chr|repr|dir|id|help|super|object|property|staticmethod|classmethod|isinstance|issubclass|callable|iter|next|slice|vars|locals|globals|eval|exec|compile)\b')),
-            ]
-
-            deadline = time.time() + 0.15  # max 150ms
-            for tag, pattern in patterns:
-                if time.time() > deadline:
-                    break
-                for match in pattern.finditer(content):
-                    if time.time() > deadline:
-                        break
-                    start = f"1.0 + {match.start()} chars"
-                    end = f"1.0 + {match.end()} chars"
-                    self.chat.tag_add(tag, start, end)
-
-            self.chat.configure(state="disabled")
-        except Exception:
-            self.chat.configure(state="disabled")
 
     def _append_user_msg(self, text: str):
-        self.chat.configure(state="normal")
-        self.chat.insert("end", f"\n>>> ", "user")
-        self.chat.insert("end", f"{text}\n\n", "user_c")
-        self.chat.see("end")
-        self.chat.configure(state="disabled")
+        """在 Monaco 编辑器中显示用户消息。"""
+        self.monaco.append_line(f">>> {text}", "user")
 
     def _tool_label(self, name: str) -> str:
         """Get icon + label for a tool name."""
@@ -1348,73 +1150,33 @@ class AgentApp(ctk.CTk):
         return ""
 
     def _append_tool(self, name: str, inp: dict, step_prefix: str = ""):
-        """Claude Code 风格：一行工具名 + 目标 + 参数，紧凑可读。"""
-        self.chat.configure(state="normal")
-        icon = self._tool_label(name)
-        path = self._tool_path_display(inp)
-
-        # 工具行：icon  name  目标
-        line = f"  {icon} {name}"
-        if path:
-            line += f"  {path}"
-        # write/edit 显示行数
-        if name == "write" and "content" in inp:
-            lines_count = len(inp["content"].split("\n"))
-            line += f"  (+{lines_count}行)"
-        if name == "edit" and "new_string" in inp:
-            lines_count = len(inp["new_string"].split("\n"))
-            line += f"  (改{lines_count}行)"
-        # 步骤计数
-        if step_prefix:
-            line += f"  {step_prefix}"
-
-        self.chat.insert("end", line + "\n", "tool")
-
-        # 额外参数用小字灰色显示
+        """Claude Code 风格：通过 Monaco 桥接显示工具调用。"""
+        self.monaco.append_tool_start(name, inp, step_prefix)
+        # 额外参数用 dim 样式显示
         extra = {k: v for k, v in inp.items()
                  if k not in ("file_path", "command", "url", "pattern", "query", "path", "content") and v}
         if extra:
             meta = "    " + " ".join(f"{k}={v}" for k, v in extra.items())
             if len(meta) > 150:
                 meta = meta[:150] + "..."
-            self.chat.insert("end", meta + "\n", "dim")
-
-        self.chat.see("end")
-        self.chat.configure(state="disabled")
+            self.monaco.append_line(meta, "dim")
 
     def _append_tool_result(self, result: str):
-        """Claude Code 风格透明展示：工具结果 + 耗时 + 下一步建议。"""
+        """通过 Monaco 桥接显示工具结果 + 耗时 + 差异比较。"""
         is_err = any(kw in result[:100].lower() for kw in ("错误", "error", "失败", "❌"))
         current_tool = self._active_tool or ""
         current_inp = self._active_tool_input or {}
 
-        # 计算耗时
         elapsed = ""
         if self._active_tool_start:
             sec = time.time() - self._active_tool_start
             elapsed = f" ({sec:.1f}s)" if sec < 60 else f" ({sec/60:.1f}m)"
 
-        self.chat.configure(state="normal")
+        # 通过 Monaco 桥接显示工具结果（含 diff 自动检测）
+        self.monaco.append_tool_result(result, current_tool, elapsed, current_inp)
 
-        # ── 统一结果头：工具名 + 状态 + 耗时 ──
-        icon = self._tool_label(current_tool)
+        # 错误处理
         if is_err:
-            self.chat.insert("end", f"    {icon} {current_tool} ❌ 失败{elapsed}\n", "err")
-        else:
-            self.chat.insert("end", f"    {icon} {current_tool} ✅ 完成{elapsed}\n", "tool")
-
-        # ── 错误详情 ──
-        if is_err:
-            summary = result[:300].replace("\n", " ")
-            self.chat.insert("end", f"    {summary}\n", "err")
-            if current_inp:
-                param_str = json.dumps(current_inp, ensure_ascii=False)[:300]
-                self.chat.insert("end", f"    ⚙ {param_str}\n", "dim")
-            for line in result.split("\n")[:5]:
-                if line.strip():
-                    self.chat.insert("end", f"      {line[:200]}\n", "dim")
-            self.chat.see("end")
-            self.chat.configure(state="disabled")
             if current_tool:
                 self._set_tool_status(current_tool, "error")
                 self._log_activity(current_tool, "error", result[:80].replace("\n", " "))
@@ -1422,64 +1184,8 @@ class AgentApp(ctk.CTk):
                 self._active_tool_input = {}
             return
 
-        # ── 成功：按工具类型格式化结果预览 ──
-
-        # 通用 diff 渲染：如果结果包含 diff 标记，优先渲染
-        has_diff = "--- DIFF START ---" in result
-
-        # edit: Unified Diff 渲染
-        if current_tool in ("edit", "write") and has_diff:
-            self._render_diff_stream(result)
-
-        # write: 内容预览（无 diff 时回退）
-        elif current_tool == "write" and current_inp.get("content"):
-            content = current_inp["content"]
-            lines = content.split("\n")
-            for line in lines[:10]:
-                self.chat.insert("end", f"      {line[:200]}\n", "code")
-            if len(lines) > 10:
-                self.chat.insert("end", f"      ... 共 {len(lines)} 行\n", "dim")
-
-        # edit: 替换内容预览（无 diff 时回退）
-        elif current_tool == "edit" and current_inp.get("new_string"):
-            new_text = current_inp["new_string"]
-            lines = new_text.split("\n")
-            for line in lines[:6]:
-                self.chat.insert("end", f"      {line[:200]}\n", "code")
-            if len(lines) > 6:
-                self.chat.insert("end", f"      ... 改 {len(lines)} 行\n", "dim")
-
-        # read: 文件内容预览
-        elif current_tool == "read":
-            lines = result.split("\n")
-            for line in lines[:8]:
-                self.chat.insert("end", f"      {line[:200]}\n", "code")
-            if len(lines) > 8:
-                self.chat.insert("end", f"      ... 共 {len(lines)} 行\n", "dim")
-                for line in lines[-3:]:
-                    self.chat.insert("end", f"      {line[:200]}\n", "code")
-
-        # bash: 最后几行输出
-        elif current_tool == "bash":
-            blines = [l for l in result.split("\n") if l.strip()]
-            if len(blines) > 6:
-                self.chat.insert("end", f"      ... 共 {len(blines)} 行输出\n", "dim")
-                for line in blines[-4:]:
-                    self.chat.insert("end", f"      {line[:200]}\n", "dim")
-            elif blines:
-                for line in blines[:6]:
-                    self.chat.insert("end", f"      {line[:200]}\n", "dim")
-
-        # 其余工具: 简短摘要
-        elif result:
-            summary = result[:200].replace("\n", " ")
-            self.chat.insert("end", f"      {summary}\n", "tool_r")
-
         # ── 下一步建议（从工作流获取）──
         self._inject_next_step_hint(current_tool)
-
-        self.chat.see("end")
-        self.chat.configure(state="disabled")
 
         # 更新工具状态面板
         if current_tool:
@@ -1501,11 +1207,10 @@ class AgentApp(ctk.CTk):
             done_count = sum(1 for s in wf.steps.values() if s.status == "done")
             total = len(wf.steps)
             step_icon = "✅" if current.status == "done" else "❌"
-            self.chat.insert("end",
-                f"  {step_icon} 步骤 \"{current.name}\" 完成 ({done_count}/{total})\n", "sys")
+            self.monaco.append_line(
+                f"  {step_icon} 步骤 \"{current.name}\" 完成 ({done_count}/{total})", "sys")
         if next_name:
-            self.chat.insert("end",
-                f"  → 下一步: {next_name}\n", "tool")
+            self.monaco.append_line(f"  → 下一步: {next_name}", "tool")
 
     def _inject_turn_summary(self):
         """每轮结束时注入一句话总结 + 下一步建议（Claude Code 风格）。"""
@@ -1530,11 +1235,8 @@ class AgentApp(ctk.CTk):
             out.append(f"  ✅ 所有步骤已完成")
             wf.status = "done"
         if len(out) > 1:
-            self.chat.configure(state="normal")
             for line in out:
-                self.chat.insert("end", line + "\n", "sys")
-            self.chat.configure(state="disabled")
-            self.chat.see("end")
+                self.monaco.append_line(line, "sys")
 
     # ── Actions ──
 
@@ -1616,9 +1318,7 @@ class AgentApp(ctk.CTk):
         self.msg_label.configure(text=f"{len(self.agent.messages)//2 if self.agent else 0} 轮")
 
     def _clear_chat(self):
-        self.chat.configure(state="normal")
-        self.chat.delete("1.0", "end")
-        self.chat.configure(state="disabled")
+        self.monaco.clear_chat()
         # Clear activity log
         self.activity_log.configure(state="normal")
         self.activity_log.delete("1.0", "end")
