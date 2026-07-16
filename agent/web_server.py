@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import queue as q_module
 import socket
 import threading
 import time
@@ -61,7 +62,8 @@ class WebServer:
         self.host: str = "127.0.0.1"
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
-        self._sse_clients: list[asyncio.Queue] = []
+        # 使用 threading.Queue（线程安全，Agent 后台线程可写入）
+        self._sse_queues: list[q_module.Queue] = []
         self._sse_lock = threading.Lock()
 
         self.app = FastAPI(title="AgiCode Web")
@@ -85,29 +87,36 @@ class WebServer:
         @app.get("/api/stream")
         async def sse_stream(request: Request):
             """SSE 端点：推送 Agent 事件给前端。"""
-            queue: asyncio.Queue = asyncio.Queue()
+            # threading.Queue 是线程安全的，Agent 后台线程可写入
+            queue: q_module.Queue = q_module.Queue(maxsize=1000)
             with self._sse_lock:
-                self._sse_clients.append(queue)
+                self._sse_queues.append(queue)
 
             async def event_generator():
+                loop = asyncio.get_event_loop()
                 try:
                     while True:
                         if await request.is_disconnected():
                             break
                         try:
-                            data = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        except asyncio.TimeoutError:
-                            yield ": keepalive\n\n"
+                            data = await loop.run_in_executor(
+                                None, lambda: queue.get(timeout=0.5)
+                            )
+                        except q_module.Empty:
+                            yield {"event": "ping", "data": json.dumps({"type": "keepalive"})}
                             continue
+                        except Exception:
+                            break
                         if data is None:
                             break
                         event_type = data.get("type", "message")
-                        payload = json.dumps(data.get("payload", {}))
-                        yield f"event: {event_type}\ndata: {payload}\n\n"
+                        payload = data.get("payload", {})
+                        # 序列化为 JSON 字符串，确保前端 JSON.parse 能解析
+                        yield {"event": event_type, "data": json.dumps(payload, ensure_ascii=False)}
                 finally:
                     with self._sse_lock:
-                        if queue in self._sse_clients:
-                            self._sse_clients.remove(queue)
+                        if queue in self._sse_queues:
+                            self._sse_queues.remove(queue)
 
             return EventSourceResponse(event_generator())
 
@@ -119,39 +128,36 @@ class WebServer:
             if not self.agent_app:
                 return {"status": "error", "message": "Agent not initialized"}
             if not self.agent_app.api_key:
-                return {"status": "error", "message": "请先点击 ⚙ Settings 配置 API Key"}
+                return {"status": "error", "message": "请先配置 API Key（点击右上角 ⚙ Settings）"}
             if self.agent_app.busy:
                 return {"status": "error", "message": "Agent 正在工作中，请等待完成"}
             text = body.text.strip()
             if not text:
                 return {"status": "error", "message": "消息不能为空"}
-            if hasattr(self.agent_app, '_send_text'):
-                self.agent_app.after_idle(lambda: self.agent_app._send_text(text))
-            return {"status": "ok"}
+            success, err = self.agent_app.send_text(text)
+            if success:
+                return {"status": "ok"}
+            return {"status": "error", "message": err}
 
         @app.post("/api/stop")
         async def api_stop():
             """终止当前 Agent 执行。"""
-            if self.agent_app and hasattr(self.agent_app, '_stop_agent'):
-                self.agent_app.after_idle(self.agent_app._stop_agent)
+            if self.agent_app:
+                self.agent_app.stop_agent()
             return {"status": "ok"}
 
         @app.post("/api/clear")
         async def api_clear():
-            """清空对话。"""
-            if self.agent_app and hasattr(self.agent_app, '_clear_chat'):
-                self.agent_app.after_idle(self.agent_app._clear_chat)
+            """清空对话（由前端处理）。"""
             return {"status": "ok"}
 
         @app.post("/api/retry")
         async def api_retry():
-            """重试上次输入。"""
-            if self.agent_app and hasattr(self.agent_app, '_retry_last'):
-                self.agent_app.after_idle(self.agent_app._retry_last)
+            """重试上次输入（由前端处理）。"""
             return {"status": "ok"}
 
         @app.post("/api/diff")
-        async def api_diff(body: dict):
+        async def api_diff(body: dict = Body(...)):
             """解析 Unified Diff。"""
             try:
                 result = parse_unified_diff(body.get("diff", ""))
@@ -176,28 +182,23 @@ class WebServer:
             """获取当前配置。"""
             if not self.agent_app:
                 return {"provider": "", "model": "", "api_key": "", "base_url": ""}
+            cfg = self.agent_app.get_config()
             return {
-                "provider": self.agent_app.provider_name,
-                "model": self.agent_app.model,
-                "api_key": "****" if self.agent_app.api_key else "",
-                "base_url": self.agent_app.base_url,
+                "provider": cfg["provider"],
+                "model": cfg["model"],
+                "api_key": "****" if cfg["api_key"] else "",
+                "base_url": cfg["base_url"],
             }
 
         @app.post("/api/config")
-        async def api_set_config(body: dict):
+        async def api_set_config(body: dict = Body(...)):
             """保存配置并重新初始化 Agent。"""
             if not self.agent_app:
                 return {"status": "error", "message": "Not initialized"}
-            try:
-                self.agent_app.provider_name = body.get("provider", self.agent_app.provider_name)
-                self.agent_app.api_key = body.get("api_key", self.agent_app.api_key)
-                self.agent_app.model = body.get("model", self.agent_app.model)
-                self.agent_app.base_url = body.get("base_url", self.agent_app.base_url)
-                self.agent_app._save_config()
-                self.agent_app._init_agent()
-                return {"status": "ok"}
-            except Exception as e:
-                return {"status": "error", "message": str(e)}
+            err = self.agent_app.set_config(body)
+            if err:
+                return {"status": "error", "message": err}
+            return {"status": "ok"}
 
         @app.get("/api/tools")
         async def api_tools():
@@ -242,10 +243,10 @@ class WebServer:
     def stop(self):
         """关闭服务器。"""
         with self._sse_lock:
-            for q in self._sse_clients:
+            for q in self._sse_queues:
                 try: q.put_nowait(None)
                 except: pass
-            self._sse_clients.clear()
+            self._sse_queues.clear()
         if self._server:
             self._server.should_exit = True
         if self._thread:
@@ -255,12 +256,12 @@ class WebServer:
         return f"http://{self.host}:{self.port}"
 
     def push_sse(self, event_type: str, payload: Any):
-        """广播事件到所有 SSE 客户端。"""
+        """广播事件到所有 SSE 客户端（线程安全）。"""
         with self._sse_lock:
-            for q in self._sse_clients:
+            for q in self._sse_queues:
                 try:
                     q.put_nowait({"type": event_type, "payload": payload})
-                except asyncio.QueueFull:
+                except q_module.Full:
                     pass
 
 
