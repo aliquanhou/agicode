@@ -900,7 +900,6 @@ function addAuditEvent(d){
 }
 
 function renderAudit(){
-  // 统计
   var counts = {pass:0, warn:0, retry:0, fix:0, block:0};
   _auditRecords.forEach(function(r){ counts[r.severity] = (counts[r.severity]||0) + 1; });
   var total = _auditRecords.length;
@@ -911,7 +910,6 @@ function renderAudit(){
   $('au-block').textContent = counts.block;
   $('au-total').textContent = total;
 
-  // 健康状态
   var bad = counts.retry + counts.fix + counts.block;
   var ratio = total > 0 ? bad / total : 0;
   var health = 'excellent', healthLabel = '⚡ 健康';
@@ -922,25 +920,53 @@ function renderAudit(){
   he.className = 'au-health ' + health;
   he.textContent = healthLabel;
 
-  // 审核流水
   var c = $('au-items');
   if(_auditRecords.length === 0){
     c.innerHTML = '<div class="au-empty">等待工具调用...</div>';
     return;
   }
-  var show = _auditRecords.slice(-30);
+  var show = _auditRecords.slice(-25);
   var h = '';
-  show.forEach(function(r){
+  show.forEach(function(r, idx){
     var icon = _auIcons[r.severity] || '·';
     var target = '';
-    if(r.tool === 'bash') target = (r.args && r.args.command || '').substring(0,24);
-    else if(r.tool === 'read'||r.tool==='write'||r.tool==='edit') target = (r.args && r.args.file_path || '').substring(0,24);
-    else if(r.tool === 'grep'||r.tool==='glob') target = (r.args && (r.args.pattern||r.args.query) || '').substring(0,24);
+    if(r.tool === 'bash') target = (r.args && r.args.command || '').substring(0,22);
+    else if(r.tool === 'read'||r.tool==='write'||r.tool==='edit') target = (r.args && r.args.file_path || '').substring(0,22);
+    else if(r.tool === 'grep'||r.tool==='glob') target = (r.args && (r.args.pattern||r.args.query) || '').substring(0,22);
     else target = r.tool;
     var msg = r.message ? ' '+r.message : '';
-    h += '<div class="au-item"><span class="au-ic">'+icon+'</span><span class="au-tl">'+esc(r.tool||'')+'</span><span class="au-tg">'+esc(target)+''+esc(msg.substring(0,30))+'</span><span class="au-tm">'+r.duration.toFixed(1)+'s</span></div>';
+
+    // 构建可展开详情
+    var detailHtml = '';
+    var d = r.detail;
+    if(d){
+      var trig = d.trigger || '';
+      var strat = d.strategy || '';
+      detailHtml += '<div class="au-detail">';
+      if(trig) detailHtml += '<div class="au-dl"><span class="au-dl-l">🔍 触发:</span> <span class="au-dl-v err">'+esc(trig.substring(0,100))+'</span></div>';
+      if(strat) detailHtml += '<div class="au-dl"><span class="au-dl-l">🧠 策略:</span> <span class="au-dl-v info">'+esc(strat.substring(0,100))+'</span></div>';
+      if(d.before) detailHtml += '<div class="au-dl"><span class="au-dl-l">📥 修复前:</span> <span class="au-dl-v err">'+esc(d.before.substring(0,100))+'</span></div>';
+      if(d.after) detailHtml += '<div class="au-dl"><span class="au-dl-l">📤 修复后:</span> <span class="au-dl-v fix">'+esc(d.after.substring(0,100))+'</span></div>';
+      detailHtml += '</div>';
+    }
+
+    var itemId = 'aui-'+idx;
+    var arrow = d ? '▸' : ' ';
+    h += '<div class="au-item'+(d?' clickable':'')+'" id="'+itemId+'"'+(d?' onclick="toggleAuditDetail(\''+itemId+'\')"':'')+'>'
+      +'<div class="au-item-row"><span class="au-ic">'+icon+'</span>'
+      +'<span class="au-tl">'+esc(r.tool||'')+'</span>'
+      +'<span class="au-tg">'+esc(target)+''+esc(msg.substring(0,25))+'</span>'
+      +'<span class="au-tm">'+r.duration.toFixed(1)+'s</span>'
+      +'<span style="font-size:8px;color:var(--fg-3);width:10px">'+arrow+'</span></div>'
+      +detailHtml
+      +'</div>';
   });
   c.innerHTML = h;
+}
+
+function toggleAuditDetail(id){
+  var el = document.getElementById(id);
+  if(el) el.classList.toggle('expanded');
 }
 
 // 轮询审核统计

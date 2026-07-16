@@ -1,4 +1,4 @@
-"""审核引擎 — 每次工具调用后自动检查，发现错误自动修复。"""
+"""审核引擎 v2 — 详细链路追踪，每次审计输出完整决策上下文。"""
 from __future__ import annotations
 
 import json
@@ -10,15 +10,43 @@ from typing import Any, Callable
 from .auditor_rules import RULES, PASS, WARN, RETRY, FIX, BLOCK, AuditRule
 
 
+class AuditDetail:
+    """一次审核的详细决策记录。"""
+    __slots__ = ('rule', 'trigger', 'analysis', 'strategy', 'before', 'after',
+                 'before_preview', 'after_preview')
+
+    def __init__(self, rule: str, trigger: str, analysis: str, strategy: str,
+                 before: str = "", after: str = "",
+                 before_preview: str = "", after_preview: str = ""):
+        self.rule = rule
+        self.trigger = trigger
+        self.analysis = analysis
+        self.strategy = strategy
+        self.before = before
+        self.after = after
+        self.before_preview = before_preview[:200]
+        self.after_preview = after_preview[:200]
+
+    def to_dict(self) -> dict:
+        return {
+            "rule": self.rule, "trigger": self.trigger,
+            "analysis": self.analysis, "strategy": self.strategy,
+            "before": self.before_preview, "after": self.after_preview,
+        }
+
+
 class AuditResult:
-    """一次审核的结果。"""
+    """一次审核的结果（v2：含完整决策链路）。"""
     __slots__ = ('status', 'rule_name', 'message', 'tool_name', 'args',
-                 'duration', 'severity', 'retry_count', 'max_retries', 'ts')
+                 'duration', 'severity', 'retry_count', 'max_retries',
+                 'ts', 'detail', 'result_snippet')
 
     def __init__(self, status: str, rule_name: str = "", message: str = "",
                  tool_name: str = "", args: dict | None = None,
                  duration: float = 0.0, severity: str = "",
-                 retry_count: int = 0, max_retries: int = 0):
+                 retry_count: int = 0, max_retries: int = 0,
+                 detail: AuditDetail | None = None,
+                 result_snippet: str = ""):
         self.status = status
         self.rule_name = rule_name
         self.message = message
@@ -28,44 +56,56 @@ class AuditResult:
         self.severity = severity or status
         self.retry_count = retry_count
         self.max_retries = max_retries
+        self.detail = detail
+        self.result_snippet = result_snippet[:300]
         self.ts = time.time()
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "status": self.status, "rule": self.rule_name,
             "message": self.message, "tool": self.tool_name,
             "args": self.args, "duration": round(self.duration, 2),
             "severity": self.severity, "ts": self.ts,
+            "result": self.result_snippet,
         }
+        if self.detail:
+            d["detail"] = self.detail.to_dict()
+        return d
 
     @classmethod
-    def pass_(cls, tool_name: str = "", duration: float = 0.0) -> "AuditResult":
-        return cls(PASS, "", "", tool_name, duration=duration)
+    def pass_(cls, tool_name: str = "", duration: float = 0.0,
+              result_snippet: str = "") -> "AuditResult":
+        return cls(PASS, "", "", tool_name, duration=duration, result_snippet=result_snippet)
 
     @classmethod
     def warn(cls, rule: AuditRule, tool_name: str = "", duration: float = 0.0,
-             **kw) -> "AuditResult":
-        return cls(WARN, rule.name, rule.message, tool_name, duration=duration, severity=WARN, **kw)
+             detail: AuditDetail | None = None, result_snippet: str = "") -> "AuditResult":
+        return cls(WARN, rule.name, rule.message, tool_name, duration=duration,
+                   severity=WARN, detail=detail, result_snippet=result_snippet)
 
     @classmethod
     def retry(cls, rule: AuditRule, tool_name: str = "", duration: float = 0.0,
-              retry_count: int = 0, **kw) -> "AuditResult":
+              retry_count: int = 0, detail: AuditDetail | None = None,
+              result_snippet: str = "") -> "AuditResult":
         return cls(RETRY, rule.name, rule.message, tool_name, duration=duration,
-                   severity=RETRY, retry_count=retry_count, max_retries=rule.max_retries, **kw)
+                   severity=RETRY, retry_count=retry_count, max_retries=rule.max_retries,
+                   detail=detail, result_snippet=result_snippet)
 
     @classmethod
     def fix(cls, rule: AuditRule, tool_name: str = "", duration: float = 0.0,
-            **kw) -> "AuditResult":
-        return cls(FIX, rule.name, rule.message, tool_name, duration=duration, severity=FIX, **kw)
+            detail: AuditDetail | None = None, result_snippet: str = "") -> "AuditResult":
+        return cls(FIX, rule.name, rule.message, tool_name, duration=duration,
+                   severity=FIX, detail=detail, result_snippet=result_snippet)
 
     @classmethod
     def block(cls, rule: AuditRule, tool_name: str = "", duration: float = 0.0,
-              **kw) -> "AuditResult":
-        return cls(BLOCK, rule.name, rule.message, tool_name, duration=duration, severity=BLOCK, **kw)
+              detail: AuditDetail | None = None, result_snippet: str = "") -> "AuditResult":
+        return cls(BLOCK, rule.name, rule.message, tool_name, duration=duration,
+                   severity=BLOCK, detail=detail, result_snippet=result_snippet)
 
 
 class Auditor:
-    """审核引擎 — 单例，规则驱动，零 LLM 调用。"""
+    """审核引擎 v2 — 详细链路追踪。"""
 
     _instance = None
     _lock = None
@@ -89,17 +129,16 @@ class Auditor:
         self._on_audit: list[Callable] = []
         self.max_records = 500
 
-    # ── 订阅 ──
     def on_audit(self, callback: Callable[[AuditResult], None]):
         self._on_audit.append(callback)
 
-    # ── 审核一次工具调用 ──
     def audit(self, tool_name: str, args: dict,
               result: str = "", duration: float = 0.0,
               error_type: str = "") -> AuditResult:
-        """对一次工具调用执行审核，返回结果。"""
+        """执行审核，返回含完整决策链路的结果。"""
         result_str = result or ""
         key = f"{tool_name}:{str(list(args.items()))[:60]}"
+        snippet = result_str[:300]
 
         for rule in RULES:
             try:
@@ -108,8 +147,16 @@ class Auditor:
             except Exception:
                 continue
 
+            # 提取触发详情和修复策略
+            trigger = self._build_trigger(rule, tool_name, args, result_str, error_type)
+            analysis = rule.message or "规则触发"
+            strategy = self._build_strategy(rule, tool_name, args)
+
             if rule.severity == BLOCK:
-                r = AuditResult.block(rule, tool_name, duration)
+                detail = AuditDetail(rule.name, trigger, analysis, strategy,
+                                     before=result_str[:200],
+                                     before_preview=trigger)
+                r = AuditResult.block(rule, tool_name, duration, detail=detail, result_snippet=snippet)
                 self._record(r)
                 return r
 
@@ -117,37 +164,89 @@ class Auditor:
                 rc = self._retry_counts.get(key, 0)
                 if rc < rule.max_retries:
                     self._retry_counts[key] = rc + 1
-                    r = AuditResult.retry(rule, tool_name, duration, retry_count=rc)
+                    strategy = f"第 {rc+1}/{rule.max_retries} 次重试: {strategy}"
+                    detail = AuditDetail(rule.name, trigger, analysis, strategy,
+                                         before=result_str[:200],
+                                         before_preview=f"原结果: {result_str[:100]}")
+                    r = AuditResult.retry(rule, tool_name, duration, retry_count=rc,
+                                          detail=detail, result_snippet=snippet)
                     self._record(r)
                     return r
 
             if rule.severity == FIX:
-                r = AuditResult.fix(rule, tool_name, duration)
-                self._record(r)
+                before_state = ""
+                after_state = ""
                 if rule.fix == "mkdir":
-                    self._apply_mkdir_fix(args)
+                    fp = args.get("file_path", "")
+                    before_state = f"文件不存在: {fp}" if fp else trigger
+                    d = os.path.dirname(os.path.abspath(fp)) if fp else ""
+                    try:
+                        os.makedirs(d, exist_ok=True)
+                        after_state = f"目录已创建: {d}" if d else "已修复"
+                    except Exception as ex:
+                        after_state = f"目录创建失败: {ex}"
+
+                detail = AuditDetail(rule.name, trigger, analysis, strategy,
+                                     before=before_state, after=after_state,
+                                     before_preview=before_state, after_preview=after_state)
+                r = AuditResult.fix(rule, tool_name, duration, detail=detail, result_snippet=snippet)
+                self._record(r)
                 return r
 
             if rule.severity == WARN:
-                r = AuditResult.warn(rule, tool_name, duration)
+                detail = AuditDetail(rule.name, trigger, analysis, strategy,
+                                     before=result_str[:200],
+                                     before_preview=result_str[:100])
+                r = AuditResult.warn(rule, tool_name, duration, detail=detail, result_snippet=snippet)
                 self._record(r)
                 return r
 
-        # 全部通过
-        r = AuditResult.pass_(tool_name, duration)
+        r = AuditResult.pass_(tool_name, duration, result_snippet=snippet)
         self._record(r)
         return r
 
-    def _apply_mkdir_fix(self, args: dict):
-        """修复：自动创建父目录。"""
-        fp = args.get("file_path", "")
-        if not fp:
-            return
-        d = os.path.dirname(os.path.abspath(fp))
-        try:
-            os.makedirs(d, exist_ok=True)
-        except Exception:
-            pass
+    def _build_trigger(self, rule: AuditRule, tool: str, args: dict,
+                       result: str, error_type: str) -> str:
+        """生成人类可读的触发原因。"""
+        if tool == "bash":
+            cmd = (args.get("command", "") or "")[:80]
+            if any(k in result.lower()[:100] for k in ("error", "❌", "exception", "traceback")):
+                return f"命令 `{cmd}` 输出包含错误信息"
+            if "exit code" in result.lower():
+                lines = [l for l in result.split("\n") if "exit code" in l.lower() or "error" in l.lower()]
+                return f"命令 `{cmd}` 退出码异常: {(lines[0] if lines else result)[:120]}"
+            return f"命令触发: {cmd}"
+        if tool in ("read", "write", "edit", "delete"):
+            fp = args.get("file_path", "")[:60]
+            if "not found" in result.lower() or "找不到" in result:
+                return f"文件不存在: {fp}"
+            if "permission" in result.lower():
+                return f"权限不足: {fp}"
+            return f"文件操作触发: {fp}"
+        if tool == "grep":
+            pat = args.get("pattern", "")[:40]
+            return f"搜索 `{pat}` 无匹配结果"
+        if error_type:
+            return f"错误类型: {error_type}"
+        return f"工具 `{tool}` 结果异常"
+
+    def _build_strategy(self, rule: AuditRule, tool: str, args: dict) -> str:
+        """生成修复策略描述。"""
+        strategies = {
+            "dangerous_command": "危险命令，直接阻止执行",
+            "dangerous_delete": "危险删除操作，直接阻止",
+            "empty_result": f"检查 {tool} 参数后重新执行",
+            "timeout": "终止当前命令，降低复杂度后重试",
+            "adb_not_found": "检查 ADB 连接状态后重试",
+            "network_error": "等待 3 秒后重新请求",
+            "file_not_found": f"自动创建父目录后重新读取",
+            "write_failed_dir": "检查并创建目标目录后重新写入",
+            "build_failed": "清理缓存后重新构建",
+            "grep_no_match": "搜索结果为空，属于正常情况，继续执行",
+            "slow_call": f"`{tool}` 执行耗时较长，已记录",
+            "error_in_output": "检测到错误输出但未阻断，标记警告",
+        }
+        return strategies.get(rule.name, f"执行修复策略: {rule.name}")
 
     def _record(self, r: AuditResult):
         self.records.append(r)
@@ -159,7 +258,6 @@ class Auditor:
             except Exception:
                 pass
 
-    # ── 统计 ──
     def get_stats(self) -> dict:
         counts = {"pass": 0, "warn": 0, "retry": 0, "fix": 0, "block": 0}
         for r in self.records:
@@ -193,29 +291,39 @@ class Auditor:
         return [r.to_dict() for r in self.records[-limit:]]
 
     def get_report(self) -> str:
-        """生成可复制的文本报告。"""
-        lines = ["📋 审核报告", "═" * 50, f"总调用: {len(self.records)}"]
+        lines = []
+        lines.append("📋 审核报告")
+        lines.append("═" * 60)
         s = self.get_stats()
-        lines.append(f"✅ 通过: {s['pass']}  ⚠️ 警告: {s['warn']}  🔄 重试: {s['retry']}  🔧 修复: {s['fix']}  🚦 阻塞: {s['block']}")
-        lines.append(f"健康状态: {s['health']}")
+        lines.append(f"总调用: {s['total']}  |  健康状态: {s['health']}")
+        lines.append(f"✅ 通过: {s['pass']}  ⚠️ 警告: {s['warn']}  🔄 重试: {s['retry']}")
+        lines.append(f"🔧 修复: {s['fix']}  🚦 阻塞: {s['block']}")
         lines.append("")
-        lines.append("详细记录:")
-        for r in self.records[-30:]:
-            status_icon = {"pass": "✅", "warn": "⚠️", "retry": "🔄", "fix": "🔧", "block": "🚦"}.get(r.severity, "·")
-            msg = r.message or ""
-            args_preview = ""
+        lines.append("详细链路记录:")
+        lines.append("─" * 60)
+        for r in self.records[-20:]:
+            icon = {"pass": "✅", "warn": "⚠️", "retry": "🔄", "fix": "🔧", "block": "🚦"}.get(r.severity, "·")
+            cmd = ""
             if r.tool_name == "bash":
-                args_preview = (r.args.get("command", "") or "")[:40]
-            elif r.tool_name in ("read", "write", "edit", "delete", "glob", "grep"):
-                args_preview = (r.args.get("file_path", "") or r.args.get("pattern", "") or "")[:40]
-            target = f" {args_preview}" if args_preview else ""
-            lines.append(f"  {status_icon} {r.tool_name:8s}{target:45s} {r.duration:.2f}s")
-            if msg:
-                lines.append(f"     ↳ {msg}")
+                cmd = (r.args.get("command", "") or "")[:50]
+            elif r.tool_name in ("read", "write", "edit"):
+                cmd = (r.args.get("file_path", "") or "")[:50]
+            elif r.tool_name in ("grep", "glob"):
+                cmd = (r.args.get("pattern", "") or "")[:50]
+            lines.append(f"{icon} {r.tool_name:8s} {cmd:50s} {r.duration:.2f}s")
+            if r.detail:
+                d = r.detail
+                lines.append(f"   └─ 触发: {d.trigger[:70]}")
+                if d.strategy:
+                    lines.append(f"   └─ 策略: {d.strategy[:70]}")
+                if d.before_preview:
+                    lines.append(f"   └─ 修复前: {d.before_preview[:70]}")
+                if d.after_preview:
+                    lines.append(f"   └─ 修复后: {d.after_preview[:70]}")
+            lines.append("")
         return "\n".join(lines)
 
 
-# ── 全局实例 ──
 _auditor: Auditor | None = None
 
 
@@ -229,5 +337,4 @@ def get_auditor() -> Auditor:
 def audit_tool_call(tool_name: str, args: dict,
                     result: str = "", duration: float = 0.0,
                     error_type: str = "") -> AuditResult:
-    """执行审核的便捷函数。"""
     return get_auditor().audit(tool_name, args, result, duration, error_type)
