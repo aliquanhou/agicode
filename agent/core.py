@@ -173,10 +173,13 @@ class Agent:
         final_response = ""
         tool_round = 0
         start_time = time.time()
-        max_rounds = self.config.get("max_tool_rounds", 50)
-        # 重复调用检测：记录最近 N 次调用
-        recent_calls: list[tuple[str, str]] = []
-        REPEAT_THRESHOLD = 5  # 同一工具+同一参数连续重复 N 次则打断
+        max_rounds = self.config.get("max_tool_rounds", 15)  # 硬上限 15 轮
+        # 重复调用检测（按工具名，不看参数——变参绕不过）
+        recent_tool_names: list[str] = []
+        SAME_TOOL_LIMIT = 6  # 同一工具名连续 6 次就打断
+        # 语义停滞检测：追踪每次调用的工具名和结果长度
+        recent_content_hashes: list[int] = []
+        STALL_ROUNDS = 10  # 10 轮没有实质性输出变化就打断
 
         # 同步 workflow 到 session（工具函数可访问）
         set_session_workflow(self.workflow)
@@ -184,15 +187,16 @@ class Agent:
         while True:
             tool_round += 1
 
-            # ── 防死循环检测 ──
-            # 1. 最大轮次限制
+            # ── 防死循环检测（三层）──
+
+            # 第 1 层：最大轮次硬上限
             if tool_round > max_rounds:
                 self.transcript.emit("loop", warning="max_rounds",
                                      reason=f"达到最大工具调用轮次 {max_rounds}")
                 final_response += f"\n[系统: 已达到最大工具调用轮次 ({max_rounds})，自动终止]"
                 break
 
-            # 2. 超时保护
+            # 第 2 层：超时保护
             elapsed = time.time() - start_time
             timeout = self.config.get("timeout", 3600)
             if elapsed > timeout:
@@ -201,18 +205,30 @@ class Agent:
                 final_response += f"\n[系统: 执行超时 ({int(elapsed)}s)，自动终止]"
                 break
 
-            # 3. 进度停滞保护：如果工作流有计划但没有进展
+            # 第 3 层：工作流停滞（如果有 plan 但没有进展）
             if self.workflow and self.workflow.steps:
                 done_since_start = sum(
                     1 for s in self.workflow.steps.values()
                     if s.status in ("done", "skipped", "failed")
                 )
-                # 如果超过 20 轮仍无进展，打断
-                if tool_round >= 20 and done_since_start == 0 and tool_round % 10 == 0:
+                if tool_round >= 12 and done_since_start == 0:
                     self.transcript.emit("loop", warning="stalled",
                                          reason=f"{tool_round} 轮调用但工作流无进展")
-                    final_response += f"\n[系统: 检测到可能死循环 ({tool_round} 轮无进展)，自动终止]"
+                    final_response += f"\n[系统: {tool_round} 轮无进展，自动终止]"
                     break
+
+            # ── 注入轮次提示给 LLM（让 LLM 知道自己在第几轮）──
+            round_hint = {
+                "role": "user",
+                "content": (
+                    f"[系统进度: 第 {tool_round}/{max_rounds} 轮工具调用] "
+                    f"已耗时 {elapsed:.0f}s。请在必要的工具调用后尽快给出最终答案。"
+                    f"如果不需要再调用工具，直接回复即可。"
+                )
+            }
+
+            # 在调用 LLM 前注入轮次提示（只在这个循环内有效，不持久化到 session）
+            messages_with_hint = messages + [round_hint]
 
             self.transcript.phase("running", phase_name="execute",
                                   round=tool_round,
@@ -222,11 +238,11 @@ class Agent:
                                       if s.status in ("done", "skipped", "failed")
                                   ))
 
-            # ── 调用 LLM（流式，全透明）──
+            # ── 调用 LLM（流式，全透明；注入轮次提示）──
             try:
                 response_data = self._stream_llm(
                     system=system_prompt,
-                    messages=messages,
+                    messages=messages_with_hint,
                     tools=tools,
                     on_text=on_text,
                 )
@@ -235,9 +251,8 @@ class Agent:
                 self.transcript.error(source="llm", message=str(e))
                 self.state.log_error("llm_complete", str(e))
 
-                # 可重试
                 if self.config.get("retry_on_failure"):
-                    retried = self._retry_llm(system_prompt, messages, tools, on_text)
+                    retried = self._retry_llm(system_prompt, messages_with_hint, tools, on_text)
                     if retried is not None:
                         response_data = retried
                     else:
@@ -292,18 +307,15 @@ class Agent:
                 }
                 assistant_msg["tool_calls"].append(tool_call_entry)
 
-                # ── 重复调用检测（只标记，不 break——让当前工具跑完保证消息配对）──
-                call_sig = tool_name + ":" + str(list(args.items()))[:80]
-                recent_calls.append(call_sig)
-                if len(recent_calls) > REPEAT_THRESHOLD:
-                    recent_calls.pop(0)
-                    if len(set(recent_calls)) == 1:
-                        self.transcript.emit("loop", warning="repeated_call",
-                                             reason=f"重复调用 {tool_name} {REPEAT_THRESHOLD} 次")
-                        final_response += "\n[系统: 检测到重复调用，自动终止]"
-                        recent_calls.clear()
+                # ── 同工具名连续调用检测（不看参数，变参也逃不掉）──
+                recent_tool_names.append(tool_name)
+                if len(recent_tool_names) > SAME_TOOL_LIMIT:
+                    recent_tool_names.pop(0)
+                    if len(set(recent_tool_names)) == 1:
+                        self.transcript.emit("loop", warning="same_tool",
+                                             reason=f"连续 {SAME_TOOL_LIMIT} 次调用 {tool_name}")
+                        final_response += f"\n[系统: 检测到 {tool_name} 连续调用 {SAME_TOOL_LIMIT} 次，自动终止]"
                         _dead_loop_break = True
-                        # 不 break——让当前工具正常执行完，保证 tool_call ↔ tool_result 配对完整
 
                 # ── 执行工具 ──
                 t0 = time.time()
@@ -334,6 +346,17 @@ class Agent:
                     "content": result_preview,
                 }
                 tool_results.append(tool_result_msg)
+
+                # ── 内容哈希（检测输出是否在空转）──
+                result_hash = hash(result_preview[:200])
+                recent_content_hashes.append(result_hash)
+                if len(recent_content_hashes) > STALL_ROUNDS:
+                    recent_content_hashes.pop(0)
+                    if len(set(recent_content_hashes)) == 1:
+                        self.transcript.emit("loop", warning="stalled_content",
+                                             reason=f"{STALL_ROUNDS} 轮结果无变化")
+                        final_response += f"\n[系统: 检测到 {STALL_ROUNDS} 轮输出无变化，自动终止]"
+                        _dead_loop_break = True
 
             # ── 防死循环标志：跳过消息追加，直接跳出 while ──
             if _dead_loop_break:
