@@ -258,6 +258,9 @@ class Agent:
 
                 # ── 执行工具 ──
                 t0 = time.time()
+                # 通知回调：工具开始（附带参数），解决之前工具名丢失的 bug
+                if on_tool_start:
+                    on_tool_start(tool_name, args)
                 try:
                     result = execute_tool(tool_name, args)
                 except Exception as e:
@@ -442,7 +445,7 @@ class Agent:
 
     def _bridge_handler(self, event, handler: StreamHandler):
         """将转录事件桥接到 v1.0 StreamHandler。"""
-        if event.type == "thinking":
+        if event.type in ("thinking", "thought"):
             handler.on_thinking(event.payload.get("delta", ""))
         elif event.type == "tool" and event.subtype == "start":
             pass  # 已通过 on_tool_start 推送

@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agent.providers import LLMProvider, AnthropicProvider, OpenAIProvider, create_llm_provider
-from agent.router import _MODEL_PRICING, classify_task, recommend_model
+from agent.router import _MODEL_RANK, classify_task, recommend_model
 
 
 class TestModelPricing:
@@ -16,12 +16,11 @@ class TestModelPricing:
             "deepseek-chat", "deepseek-reasoner", "gpt-4o", "gpt-4o-mini",
         ]
         for m in models:
-            assert m in _MODEL_PRICING, f"Missing: {m}"
+            assert m in _MODEL_RANK, f"Missing: {m}"
 
-    def test_prices_positive(self):
-        for p in _MODEL_PRICING.values():
-            assert p["input"] > 0
-            assert p["output"] > 0
+    def test_rank_positive(self):
+        for m, rank in _MODEL_RANK.items():
+            assert rank > 0, f"{m} has invalid rank: {rank}"
 
 
 class TestProviderFactory:

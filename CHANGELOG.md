@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.0.0 (2026-07-16) — Web UI v2: Glass-box Agent Interface
+
+### Web UI (全新重写)
+- **零依赖前端**: 纯 HTML/CSS/JS，无 CDN、无 Monaco Editor、无 npm
+- **Claude Code 风格会话**: 流式文本累积 + 紧凑工具行 + 内联 diff 渲染
+- **40+ 工具面板**: 11 个类别，实时状态指示灯（idle/running/done/error）
+- **工作流面板**: 进度条 + 步骤列表，实时同步后端 Workflow 状态机
+- **事件日志**: 可过滤的实时事件流（session/phase/step/tool/text/thought）
+- **配置面板**: Provider/Key/Model 热配置，测试连接
+- **子 Agent 面板**: 选择 code-architect/code-reviewer 快速调起
+- **粒子动画背景**: Canvas 120 粒子 + 鼠标交互连线
+- **动态光晕**: 3 个浮动光球（青/紫/粉），20-30s 周期漂浮
+
+### Bug 修复
+- **工具名丢失**: core.py on_tool_start 回调从未被调用 → 已修复
+- **文本流不累积**: SSE text delta 每次覆盖前文 → 改用 _acc 累积重渲染
+- **事件重复**: WebStreamHandler 同时走 transcript 订阅和 callback 两条路径 → 单路径
+- **占位符外露**: %%IC0%%/%%CB0%% 显示为文字 → 修复保护/恢复顺序
+- **多工具同名错配**: 连续 bash 调用状态配对错误 → 改用 dataset + pending 扫描
+- **思考事件丢失**: bridge handler 类型名 "thinking" ≠ "thought" → 双名匹配
+
+### 性能
+- 页面体积从 ~16 MB（Monaco）降至 ~45 KB
+- 零外部请求，完全离线可用
+- Diff 自动折叠 (>30行) + 滚动限制 (>50行)
+
+### 文档
+- 新增 `docs/web-ui-v2.md` — 完整架构、事件协议、UI 组件、集成点、审计记录
+
 ## 1.0.0 (2026-07-16) — AgiCode 初始版本
 
 ### 核心

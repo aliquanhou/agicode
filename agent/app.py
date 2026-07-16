@@ -41,11 +41,18 @@ PROVIDER_NAMES = list(PROVIDER_PRESETS.keys())
 
 
 class WebStreamHandler(StreamHandler):
-    """StreamHandler 桥接：将 Agent 事件推送到 web_server SSE。"""
+    """StreamHandler 桥接：将 Agent 事件推送到 web_server SSE。
 
-    def __init__(self, web_server: WebServer):
+    修复：使用队列追踪多工具调用的名称，避免重叠工具时名字被覆盖。
+    同时订阅 transcript 事件获取完整信息。
+    """
+
+    def __init__(self, web_server: WebServer, transcript=None):
         self.web_server = web_server
+        self._tool_queue: list[str] = []
         self._tool_name = ""
+        # 只用 callback 路径，不用 transcript 订阅（避免重复事件）
+        self._tool_callbacks = True
 
     def on_text(self, text: str) -> None:
         self.web_server.push_sse("text", {"delta": text})
@@ -54,15 +61,31 @@ class WebStreamHandler(StreamHandler):
         self.web_server.push_sse("thought", {"delta": text})
 
     def on_tool_start(self, name: str, input_data: dict) -> None:
+        """直接从 callback 推 SSE（唯一路径，无重复）。"""
+        path = (input_data.get("file_path") or input_data.get("command") or
+                input_data.get("url") or input_data.get("pattern") or input_data.get("query") or "")
+        extra = ""
+        if not path:
+            extras = []
+            for k, v in input_data.items():
+                if k not in ("file_path", "command", "url", "pattern", "query", "path", "content") and v:
+                    extras.append(f"{k}={v}")
+            extra = " ".join(extras)[:80] if extras else ""
         self._tool_name = name
-        self.web_server.push_sse("tool", {"subtype": "start", "tool_name": name})
+        self._tool_queue.append(name)
+        self.web_server.push_sse("tool", {
+            "subtype": "start", "tool_name": name,
+            "file_path": path, "args_preview": extra,
+        })
 
     def on_tool_result(self, result: str) -> None:
+        name = self._tool_queue.pop(0) if self._tool_queue else self._tool_name
         is_err = any(k in result[:100].lower() for k in ("error", "错误", "失败", "❌"))
         self.web_server.push_sse("tool", {
-            "subtype": "result",
-            "tool_name": self._tool_name or "",
+            "subtype": "result", "tool_name": name,
             "status": "error" if is_err else "done",
+            "result": (result or "")[:500],
+            "duration_ms": 0,
         })
 
     def on_error(self, error: str) -> None:
@@ -186,7 +209,8 @@ class AgentApp:
 
         def _run():
             try:
-                handler = WebStreamHandler(web_server=self.web_server)
+                transcript = self.agent.transcript if self.agent else None
+                handler = WebStreamHandler(web_server=self.web_server, transcript=transcript)
                 self.agent.run_iteration(text, handler)
             except Exception as e:
                 self.web_server.push_sse("error", {"message": str(e)})

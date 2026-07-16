@@ -31,13 +31,14 @@ _TASK_PATTERNS: dict[str, list[str]] = {
         "创建", "写一个", "生成", "新建", "function", "class",
     ],
     "code_review": [
-        "review", "audit", "检查", "审查", "bug", "安全", "性能",
+        "review", "audit", "检查", "审查", "安全", "性能",
     ],
     "debug": [
         "error", "fix", "修复", "不对", "报错", "崩溃", "失败",
     ],
     "plan": [
         "plan", "design", "架构", "设计", "方案", "规划", "计划",
+        "拆分", "微服务", "架构设计",
     ],
 }
 
@@ -80,7 +81,7 @@ def recommend_model(user_input: str, available_models: list[str]) -> str:
     if not ranked:
         return available_models[0] if available_models else ""
 
-    best_model, best_dist = ranked[0], abs(ranked[0][1] - target)
+    best_model, best_dist = ranked[0][0], abs(ranked[0][1] - target)
     for m, rank in ranked[1:]:
         d = abs(rank - target)
         if d < best_dist:
@@ -98,6 +99,11 @@ def compare_models(user_input: str, available_models: list[str]) -> list[dict]:
         base = _strip_provider_prefix(m)
         rank = _MODEL_RANK.get(base, 99)
         if rank < 99:
-            results.append({"model": m, "tier": rank, "match": abs(rank - target)})
+            results.append({
+                "model": m,
+                "tier": rank,
+                "match": abs(rank - target),
+                "cost": rank * 0.5,
+            })
     results.sort(key=lambda x: (x["match"], x["tier"]))
     return results

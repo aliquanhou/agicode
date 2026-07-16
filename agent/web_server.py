@@ -18,7 +18,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import Body, FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -215,13 +215,18 @@ class WebServer:
 
         @app.get("/{filename:path}")
         async def serve_static(filename: str):
-            """提供 editor/ 下的静态文件。"""
+            """提供 editor/ 下的静态文件（禁止缓存）。"""
             file_path = (EDITOR_DIR / filename).resolve()
             if not str(file_path).startswith(str(EDITOR_DIR.resolve())):
                 return HTMLResponse("Forbidden", status_code=403)
             if not file_path.exists() or not file_path.is_file():
                 return HTMLResponse("Not Found", status_code=404)
-            return FileResponse(str(file_path))
+            content = file_path.read_bytes()
+            ext = file_path.suffix.lower()
+            media_types = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon'}
+            return Response(content=content, media_type=media_types.get(ext, 'text/plain'),
+                          headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                                   "Pragma": "no-cache", "Expires": "0"})
 
     # ── 生命周期 ──
 

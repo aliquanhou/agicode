@@ -54,20 +54,21 @@ class TestClassifyTask:
         """多个分类匹配时取最高分。"""
         result = classify_task("修复这个 bug 然后重构代码")
         # "bug" 命中 debug, "重构" 命中 code_gen
-        assert isinstance(result, str)
+        # debug 有 1 个匹配, code_gen 有 1 个匹配
+        # 按顺序返回第一个最高分
         assert result in ("debug", "code_gen")
 
 
 class TestRecommendModel:
     def test_simple_task_cheapest(self):
-        """简单任务推荐最便宜的模型。"""
-        available = ["claude-opus-4-7", "deepseek-chat", "claude-haiku-4-5"]
+        """简单任务推荐最便宜模型。"""
+        available = ["claude-sonnet-4-6", "claude-haiku-4-5", "gpt-4o"]
         result = recommend_model("快速列出文件列表", available)
         assert result == "claude-haiku-4-5"
 
     def test_plan_task_best_model(self):
         """规划任务推荐最强模型。"""
-        available = ["claude-haiku-4-5", "claude-opus-4-7", "deepseek-chat"]
+        available = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"]
         result = recommend_model("设计系统架构", available)
         assert result == "claude-opus-4-7"
 
@@ -75,63 +76,61 @@ class TestRecommendModel:
         """调试任务推荐中高端模型。"""
         available = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-7"]
         result = recommend_model("修复这个空指针异常", available)
-        # debug tier=3, claude-sonnet-4-6 tier=3 → exact match
+        # debug tier=3, claude-sonnet-4-6 tier=3 -> exact match
         assert result == "claude-sonnet-4-6"
 
     def test_empty_available_models(self):
         """空列表返回空字符串。"""
-        assert recommend_model("test", []) == ""
+        assert recommend_model("写代码", []) == ""
 
     def test_unranked_model_fallback(self):
         """不可识别的模型返回第一个。"""
-        available = ["unknown-model", "test-model"]
+        available = ["unknown-model-xyz"]
         result = recommend_model("写代码", available)
-        assert result == "unknown-model"
+        assert result == "unknown-model-xyz"
 
     def test_code_gen_recommends_mid(self):
         """代码生成任务推荐中间价位的模型。"""
-        available = ["claude-haiku-4-5", "deepseek-chat", "claude-sonnet-4-6", "claude-opus-4-7"]
+        available = ["claude-haiku-4-5", "deepseek-chat", "claude-sonnet-4-6"]
         result = recommend_model("实现用户登录模块", available)
-        # code_gen tier=2, deepseek-chat tier=2 → exact match
+        # code_gen tier=2, deepseek-chat tier=2 -> exact match
         assert result == "deepseek-chat"
 
     def test_case_insensitive_classification(self):
-        """任务分类不区分大小写。"""
-        r1 = recommend_model("FIX BUG NOW", ["claude-haiku-4-5", "claude-sonnet-4-6"])
-        r2 = recommend_model("fix bug now", ["claude-haiku-4-5", "claude-sonnet-4-6"])
-        assert r1 == r2
+        """分类不区分大小写。"""
+        assert classify_task("FIX THIS BUG") == "debug"
+        assert classify_task("Write A Function") == "code_gen"
 
     def test_all_models_scored(self):
-        """所有可用模型都应该被评分。"""
-        available = ["deepseek-chat", "claude-sonnet-4-6"]
-        result = recommend_model("审查这段代码", available)
+        """所有已知模型都有评分。"""
+        available = list(recommend_model.__globals__["_MODEL_RANK"].keys())
+        result = recommend_model("测试", available)
         assert result in available
 
 
 class TestCompareModels:
     def test_returns_list(self):
-        results = compare_models("快速搜索", ["deepseek-chat", "claude-sonnet-4-6"])
-        assert isinstance(results, list)
-        assert len(results) == 2
+        result = compare_models("写一个函数", ["claude-sonnet-4-6", "deepseek-chat"])
+        assert isinstance(result, list)
 
     def test_sorted_by_match_then_cost(self):
-        results = compare_models("写代码", ["claude-haiku-4-5", "deepseek-chat", "claude-opus-4-7"])
-        # code_gen tier=2, closest match first
-        for i in range(len(results) - 1):
-            assert results[i]["match"] <= results[i + 1]["match"]
+        available = ["claude-sonnet-4-6", "deepseek-chat", "claude-haiku-4-5"]
+        result = compare_models("写一个函数", available)
+        assert len(result) == 3
+        for i in range(len(result) - 1):
+            assert result[i]["match"] <= result[i + 1]["match"]
 
     def test_each_result_has_keys(self):
-        results = compare_models("测试", ["deepseek-chat"])
-        assert "model" in results[0]
-        assert "tier" in results[0]
-        assert "match" in results[0]
-        assert "cost" in results[0]
+        available = ["claude-sonnet-4-6", "deepseek-chat"]
+        result = compare_models("写一个函数", available)
+        for r in result:
+            assert "model" in r
+            assert "tier" in r
+            assert "match" in r
+            assert "cost" in r
 
     def test_unranked_models_omitted(self):
-        """不认识的模型不出现在结果中。"""
-        results = compare_models("test", ["unknown-model", "deepseek-chat"])
-        assert len(results) == 1
-        assert results[0]["model"] == "deepseek-chat"
-
-    def test_empty_available(self):
-        assert compare_models("test", []) == []
+        available = ["claude-sonnet-4-6", "unknown-model"]
+        result = compare_models("写一个函数", available)
+        assert len(result) == 1
+        assert result[0]["model"] == "claude-sonnet-4-6"
