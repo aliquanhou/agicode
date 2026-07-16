@@ -357,6 +357,14 @@ class Agent:
                 except Exception:
                     pass
 
+                # ── LLM 语义审核（异步，不阻塞）──
+                try:
+                    from .auditor_llm import audit_llm_async
+                    llm_key = f"{tool_name}_{tc_id}"
+                    audit_llm_async(llm_key, tool_name, args, result_preview, elapsed_ms / 1000)
+                except Exception:
+                    pass
+
                 self.transcript.tool("result", tool_name=tool_name, tool_id=tc_id,
                                      result=result_preview[:500],
                                      duration_ms=elapsed_ms,

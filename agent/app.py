@@ -62,11 +62,40 @@ class WebStreamHandler(StreamHandler):
         except Exception:
             pass
 
+        # ── LLM 审核子代理 ──
+        try:
+            self._init_llm_auditor()
+        except Exception:
+            pass
+
     def _on_audit_event(self, audit_result):
         """审核事件 → SSE 推送。"""
         try:
             d = audit_result.to_dict()
             self.web_server.push_sse("audit", d)
+        except Exception:
+            pass
+
+    def _init_llm_auditor(self):
+        """初始化 LLM 审核子代理。"""
+        try:
+            from .auditor_llm import get_llm_auditor
+            llm_auditor = get_llm_auditor()
+            llm_auditor.on_result(self._on_llm_audit_event)
+        except Exception:
+            pass
+
+    def _on_llm_audit_event(self, key: str, result: dict):
+        """LLM 审核结果 → SSE 推送。"""
+        try:
+            self.web_server.push_sse("audit_llm", {
+                "key": key,
+                "decision": result.get("decision", "pass"),
+                "confidence": result.get("confidence", 0),
+                "issues": result.get("issues", []),
+                "summary": result.get("summary", ""),
+                "llm_duration": result.get("llm_duration", 0),
+            })
         except Exception:
             pass
 

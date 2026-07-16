@@ -545,6 +545,10 @@ function connectSSE(){
   S.sse.addEventListener('audit',function(e){
     try{var d=JSON.parse(e.data);if(d)addAuditEvent(d);}catch(x){}
   });
+
+  S.sse.addEventListener('audit_llm',function(e){
+    try{var d=JSON.parse(e.data);if(d)addLlmAuditEvent(d);}catch(x){}
+  });
 }
 
 // ══════════════════════════════════════════════════
@@ -999,8 +1003,62 @@ function copyAuditReport(){
 
 function clearAudit(){
   _auditRecords = [];
+  _llmAuditRecords = [];
   renderAudit();
+  renderLlmAudit();
   toast('🗑 审核记录已清空', 'info');
+}
+
+// ══════════════════════════════════════════════════
+// LLM 审核子代理
+// ══════════════════════════════════════════════════
+var _llmAuditRecords = [];
+
+function addLlmAuditEvent(d){
+  _llmAuditRecords.push(d);
+  if(_llmAuditRecords.length > 100) _llmAuditRecords.shift();
+  renderLlmAudit();
+}
+
+function renderLlmAudit(){
+  var c = $('au-llm-items');
+  if(!c) return;
+  var cnt = $('au-llm-count');
+  if(cnt) cnt.textContent = _llmAuditRecords.length;
+  if(_llmAuditRecords.length === 0){
+    c.innerHTML = '<div style="text-align:center;color:var(--fg-3);font-size:10px;padding:8px">等待 LLM 审核...</div>';
+    return;
+  }
+  var show = _llmAuditRecords.slice(-10);
+  var h = '';
+  show.forEach(function(r){
+    var icon = r.decision === 'pass' ? '✅' : (r.decision === 'warn' ? '⚠️' : '🚦');
+    var conf = Math.round((r.confidence||0)*100);
+    var summary = (r.summary||'').substring(0,40);
+    var llmDur = r.llm_duration ? r.llm_duration.toFixed(1)+'s' : '';
+    var issues = r.issues || [];
+    h += '<div class="au-item clickable" onclick="this.classList.toggle(\'expanded\')">'
+      + '<div class="au-item-row">'
+      + '<span class="au-ic">'+icon+'</span>'
+      + '<span class="au-tl" style="color:var(--accent2)">LLM</span>'
+      + '<span class="au-tg">'+esc(summary)+'</span>'
+      + '<span style="font-size:8px;color:var(--fg-3);width:30px;text-align:right">'+conf+'%</span>'
+      + '</div>'
+      + '<div class="au-detail">';
+    issues.forEach(function(iss){
+      var ic = iss.severity === 'error' ? '❌' : (iss.severity === 'warning' ? '⚠️' : '💡');
+      h += '<div class="au-dl"><span class="au-dl-l">'+ic+'</span> <span class="au-dl-v">'+esc((iss.description||'').substring(0,80))+'</span></div>';
+      if(iss.suggestion) h += '<div class="au-dl" style="padding-left:14px"><span class="au-dl-l" style="color:var(--accent4)">→</span> <span class="au-dl-v info">'+esc(iss.suggestion.substring(0,80))+'</span></div>';
+    });
+    if(!issues.length && r.decision !== 'pass'){
+      h += '<div class="au-dl"><span class="au-dl-v info">'+esc(summary)+'</span></div>';
+    }
+    if(r.decision === 'pass' && !issues.length){
+      h += '<div class="au-dl"><span class="au-dl-v fix">✓ 审核通过</span></div>';
+    }
+    h += '</div></div>';
+  });
+  c.innerHTML = h;
 }
 
 function fallbackCopy(text){

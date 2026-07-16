@@ -525,6 +525,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-deep);color
           <div class="au-stat pass"><div class="au-n" id="au-total">0</div><div class="au-l">📊总计</div></div>
         </div>
         <div id="au-items"><div class="au-empty">等待工具调用...</div></div>
+        <div style="border-top:1px solid var(--bd);margin:4px 0;padding:3px 4px;font-size:9px;color:var(--accent2);display:flex;align-items:center;gap:4px;cursor:pointer" onclick="var e=document.getElementById('au-llm');e.style.display=e.style.display==='none'?'block':'none'">
+          🤖 LLM 语义审核 <span style="font-size:8px;color:var(--fg-3)" id="au-llm-count">0</span>
+        </div>
+        <div id="au-llm" style="display:none"><div id="au-llm-items"><div style="text-align:center;color:var(--fg-3);font-size:10px;padding:8px">等待 LLM 审核...</div></div></div>
         <div class="au-actions">
           <button class="au-btn" onclick="A.copyAuditReport()">📋 复制报告</button>
           <button class="au-btn" onclick="A.clearAudit()">🗑 清空</button>
