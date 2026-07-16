@@ -169,16 +169,51 @@ class Agent:
 
         self.transcript.phase("done", phase_name="plan")
 
-        # ── 2. 工具调用循环 ──
+        # ── 2. 工具调用循环（带防死循环保护）──
         final_response = ""
         tool_round = 0
         start_time = time.time()
+        max_rounds = self.config.get("max_tool_rounds", 50)
+        # 重复调用检测：记录最近 N 次调用
+        recent_calls: list[tuple[str, str]] = []
+        REPEAT_THRESHOLD = 5  # 同一工具+同一参数连续重复 N 次则打断
 
         # 同步 workflow 到 session（工具函数可访问）
         set_session_workflow(self.workflow)
 
         while True:
             tool_round += 1
+
+            # ── 防死循环检测 ──
+            # 1. 最大轮次限制
+            if tool_round > max_rounds:
+                self.transcript.emit("loop", warning="max_rounds",
+                                     reason=f"达到最大工具调用轮次 {max_rounds}")
+                final_response += f"\n[系统: 已达到最大工具调用轮次 ({max_rounds})，自动终止]"
+                break
+
+            # 2. 超时保护
+            elapsed = time.time() - start_time
+            timeout = self.config.get("timeout", 3600)
+            if elapsed > timeout:
+                self.transcript.emit("loop", warning="timeout",
+                                     reason=f"执行超时 {int(elapsed)}s")
+                final_response += f"\n[系统: 执行超时 ({int(elapsed)}s)，自动终止]"
+                break
+
+            # 3. 进度停滞保护：如果工作流有计划但没有进展
+            if self.workflow and self.workflow.steps:
+                done_since_start = sum(
+                    1 for s in self.workflow.steps.values()
+                    if s.status in ("done", "skipped", "failed")
+                )
+                # 如果超过 20 轮仍无进展，打断
+                if tool_round >= 20 and done_since_start == 0 and tool_round % 10 == 0:
+                    self.transcript.emit("loop", warning="stalled",
+                                         reason=f"{tool_round} 轮调用但工作流无进展")
+                    final_response += f"\n[系统: 检测到可能死循环 ({tool_round} 轮无进展)，自动终止]"
+                    break
+
             self.transcript.phase("running", phase_name="execute",
                                   round=tool_round,
                                   total_steps=len(self.workflow.steps),
@@ -255,6 +290,17 @@ class Agent:
                     },
                 }
                 assistant_msg["tool_calls"].append(tool_call_entry)
+
+                # ── 重复调用检测 ──
+                call_sig = tool_name + ":" + str(list(args.items()))[:80]
+                recent_calls.append(call_sig)
+                if len(recent_calls) > REPEAT_THRESHOLD:
+                    recent_calls.pop(0)
+                    if len(set(recent_calls)) == 1:
+                        self.transcript.emit("loop", warning="repeated_call",
+                                             reason=f"重复调用 {tool_name} {REPEAT_THRESHOLD} 次")
+                        final_response += "\n[系统: 检测到重复调用，自动终止]"
+                        break
 
                 # ── 执行工具 ──
                 t0 = time.time()
