@@ -218,11 +218,15 @@ class Auditor:
             return f"命令触发: {cmd}"
         if tool in ("read", "write", "edit", "delete"):
             fp = args.get("file_path", "")[:60]
+            if not fp and tool == "delete":
+                return f"危险删除操作: 未指定文件路径"
+            if not fp:
+                return f"文件操作: 路径为空"
             if "not found" in result.lower() or "找不到" in result:
                 return f"文件不存在: {fp}"
             if "permission" in result.lower():
                 return f"权限不足: {fp}"
-            return f"文件操作触发: {fp}"
+            return f"文件操作: {fp}"
         if tool == "grep":
             pat = args.get("pattern", "")[:40]
             return f"搜索 `{pat}` 无匹配结果"
@@ -233,8 +237,8 @@ class Auditor:
     def _build_strategy(self, rule: AuditRule, tool: str, args: dict) -> str:
         """生成修复策略描述。"""
         strategies = {
-            "dangerous_command": "危险命令，直接阻止执行",
-            "dangerous_delete": "危险删除操作，直接阻止",
+            "dangerous_command": f"检测到危险命令 `{(args.get('command','') or '')[:40]}`，已阻止执行",
+            "dangerous_delete": "检测到危险删除操作 (路径: " + str(args.get('file_path', '') or '空')[:30] + ")，已阻止",
             "empty_result": f"检查 {tool} 参数后重新执行",
             "timeout": "终止当前命令，降低复杂度后重试",
             "adb_not_found": "检查 ADB 连接状态后重试",
