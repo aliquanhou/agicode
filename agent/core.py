@@ -92,6 +92,13 @@ class Agent:
                  workflow: Workflow | None = None):
         self.config = {**DEFAULT_CONFIG, **(config or {})}
 
+        # ── 探针初始化（非阻塞）──
+        try:
+            from probe import get_probe
+            self.probe = get_probe()
+        except Exception:
+            self.probe = None
+
         # ── 透明输出层 ──
         self.transcript = transcript or Transcript(agent_id="agicode")
 

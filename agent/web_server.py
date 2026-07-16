@@ -247,6 +247,19 @@ class WebServer:
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
+        @app.get("/api/probe")
+        async def api_probe():
+            """探针统计 API。"""
+            try:
+                from probe import get_probe, get_summary, get_stats
+                return {
+                    "status": "ok",
+                    "stats": get_stats(),
+                    "summary": get_summary(),
+                }
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
         @app.get("/api/health")
         async def api_health():
             return {"status": "ok", "port": self.port}

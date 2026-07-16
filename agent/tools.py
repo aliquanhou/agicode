@@ -138,11 +138,14 @@ def _coerce_params(handler: Callable, params: dict) -> dict:
 
 
 def execute_tool(name: str, params: dict) -> str:
-    """执行一个工具（带统一异常处理 + 类型自动转换）。
+    """执行一个工具（带统一异常处理 + 类型自动转换 + 探针监控）。
 
     自动根据函数类型注解转换参数类型（int/bool/float），
     避免 LLM 传字符串导致 '>' not supported between instances 错误。
     """
+    import time as _time
+    _t0 = _time.time()
+
     with _REGISTRY_LOCK:
         tool_def = _TOOL_REGISTRY.get(name)
     if not tool_def:
@@ -155,16 +158,31 @@ def execute_tool(name: str, params: dict) -> str:
         result = handler(**safe_params)
         # 统一转字符串
         if result is None:
-            return ""
-        if isinstance(result, str):
-            return result
+            result = ""
+        elif not isinstance(result, str):
+            try:
+                result = str(result)
+            except Exception:
+                result = f"<{type(result).__name__}>"
+
+        # 探针记录（非阻塞）
         try:
-            return str(result)
+            from probe import get_probe
+            get_probe().record_tool_call(name, safe_params, result, _time.time() - _t0)
         except Exception:
-            return f"<{type(result).__name__}>"
+            pass
+
+        return result
     except Exception as e:
         tb = traceback.format_exc()
-        return f"[工具错误: {name}] {e}\n{tb}"
+        result = f"[工具错误: {name}] {e}\n{tb}"
+        try:
+            from probe import get_probe
+            get_probe().record_tool_call(name, params, result, _time.time() - _t0)
+            get_probe().record_error(e, {"tool": name, "args": params})
+        except Exception:
+            pass
+        return result
 
 
 # ── 从模块导入并注册工具 ──
