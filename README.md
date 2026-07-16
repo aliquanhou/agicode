@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue" alt="Python">
   <img src="https://img.shields.io/badge/Tools-40%2B-orange" alt="Tools">
-  <img src="https://img.shields.io/badge/Release-v2.0-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Release-v2.1-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/LLM-Anthropic%20·%20OpenAI%20·%20DeepSeek%20·%20Gemini%20·%20Ollama-purple" alt="Providers">
   <img src="https://img.shields.io/badge/Status-Stable-00d4ff" alt="Status">
   <img src="https://img.shields.io/badge/Transparency-Glass%20Box-success" alt="Transparency">

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.0 (2026-07-16) — Release Branch
+
+- 从 v2.0.0 创建独立发布分支 release-v2.1.0
+- Web UI v2 完整功能冻结
+- 技术文档：`docs/web-ui-v2.md` 全球公开
+- 版本标签对齐分支
+
 ## 2.0.0 (2026-07-16) — Web UI v2: Glass-box Agent Interface
 
 ### Web UI (全新重写)
