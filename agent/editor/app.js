@@ -617,6 +617,84 @@ function buildAgents(){
 }
 
 // ══════════════════════════════════════════════════
+// MCP
+// ══════════════════════════════════════════════════
+
+function loadMCPServers(){
+  fetch('/api/mcp/servers')
+    .then(function(r){return r.json()})
+    .then(function(d){
+      var c=$('mcp-c');
+      if(d.status!=='ok'||!d.servers||d.servers.length===0){
+        c.innerHTML='<div class="mcp-empty">🔌 暂无 MCP 服务器连接</div>'
+          +'<button class="mcp-add-btn" onclick="A.showMCPForm()">+ 添加 MCP 服务器</button>';
+        if(!window._mcpFormAdded) c.innerHTML+=buildMCPForm();
+        return;
+      }
+      var h='';
+      d.servers.forEach(function(s){
+        var connected=s.connected||false;
+        h+='<div class="mcp-card">'
+          +'<div class="mcp-hdr"><div class="mcp-n"><span class="mcp-dot '+(connected?'':'off')+'"></span>'+esc(s.name||s)+'</div>'
+          +'<button class="mcp-act '+(connected?'disc':'conn')+'" onclick="A.'+(connected?'disconnectMCP':'connectMCP')+'(\''+esc(s.name||s)+'\')">'+(connected?'断开':'连接')+'</button></div>';
+        if(s.command) h+='<div class="mcp-cmd">'+esc(s.command)+' '+(s.args||[]).join(' ')+'</div>';
+        var toolNames = s.tool_names || [];
+        if(toolNames.length > 0){
+          h+='<div class="mcp-ts">';
+          toolNames.forEach(function(t){h+='<span class="mcp-tt">'+esc(t)+'</span>';});
+          h+='</div>';
+        }
+        h+='</div>';
+      });
+      h+='<button class="mcp-add-btn" onclick="A.showMCPForm()">+ 连接新 MCP 服务器</button>';
+      h+=buildMCPForm();
+      c.innerHTML=h;
+    })
+    .catch(function(){
+      var c=$('mcp-c');
+      c.innerHTML='<div class="mcp-empty">🔌 无法加载 MCP 服务器</div>'
+    });
+}
+
+function buildMCPForm(){
+  return '<div class="mcp-form" id="mcp-form" style="display:none">'
+    +'<input type="text" id="mcp-name" placeholder="服务器名称 (如 playwright)">'
+    +'<input type="text" id="mcp-cmd" placeholder="启动命令 (如 npx)">'
+    +'<input type="text" id="mcp-args" placeholder="参数 (JSON 数组，如 [\"-y\",\"@anthropic/mcp-playwright\"])">'
+    +'<div class="mcp-row"><button style="background:var(--accent2);color:#fff" onclick="A.doConnectMCP()">连接</button>'
+    +'<button style="background:rgba(255,255,255,0.05);color:var(--fg-2)" onclick="A.hideMCPForm()">取消</button></div></div>';
+}
+
+function showMCPForm(){
+  var f=$('mcp-form');if(f)f.style.display='block';
+}
+function hideMCPForm(){
+  var f=$('mcp-form');if(f)f.style.display='none';
+}
+function doConnectMCP(){
+  var name=$('mcp-name'),cmd=$('mcp-cmd'),args=$('mcp-args');
+  if(!name.value.trim()||!cmd.value.trim()){toast('请填写服务器名称和命令','error');return;}
+  var body={name:name.value.trim(),command:cmd.value.trim()};
+  if(args.value.trim()){
+    try{body.args=JSON.parse(args.value.trim());}catch(e){toast('参数格式错误，需要 JSON 数组','error');return;}
+  }
+  fetch('/api/mcp/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.status==='ok'){toast('✅ 已连接: '+name.value,'success');name.value='';cmd.value='';args.value='';$('mcp-form').style.display='none';loadMCPServers();}
+      else{toast('❌ '+(d.message||'连接失败'),'error');}
+    }).catch(function(e){toast('❌ '+e.message,'error');});
+}
+function disconnectMCP(name){
+  fetch('/api/mcp/disconnect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.status==='ok'){toast('✅ 已断开: '+name,'success');loadMCPServers();}
+      else{toast('❌ '+(d.message||'断开失败'),'error');}
+    }).catch(function(e){toast('❌ '+e.message,'error');});
+}
+
+// ══════════════════════════════════════════════════
 // SETTINGS MODAL
 // ══════════════════════════════════════════════════
 
@@ -687,6 +765,9 @@ window.A={
     }).catch(function(e){st.style.color='var(--accent6)';st.textContent='❌ '+e.message;});
   },
   promptAgent:function(name){ib.value='使用 '+name+' 分析 ';ib.focus();toast('🧠 在输入框中编辑指令','info');},
+  loadMCPServers:loadMCPServers,
+  showMCPForm:showMCPForm,hideMCPForm:hideMCPForm,
+  doConnectMCP:doConnectMCP,disconnectMCP:disconnectMCP,
   toast:toast,
 };
 
@@ -712,6 +793,7 @@ function init(){
 
   // Build panels
   buildTools();renderEvFilters();buildConfig();buildAgents();
+  loadMCPServers();
 
   // Connect SSE
   connectSSE();

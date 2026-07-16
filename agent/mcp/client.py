@@ -63,6 +63,10 @@ class McpServer:
         result = self._call("initialize", {
             "protocolVersion": "0.1.0",
             "capabilities": {},
+            "clientInfo": {
+                "name": "agicode",
+                "version": "1.0.0"
+            },
         })
         if result is None:
             self._proc.terminate()
@@ -191,13 +195,14 @@ def get_server(name: str) -> McpServer | None:
 
 
 def list_servers() -> list[dict]:
-    """列出所有注册的 MCP 服务器。"""
+    """列出所有注册的 MCP 服务器（含工具名列表）。"""
     return [
         {
             "name": s.name,
             "connected": s.connected,
             "command": s.command,
             "tools": len(s.get_tools()),
+            "tool_names": [t.get("name", "") for t in s.get_tools()[:50]],
         }
         for s in _MCP_SERVERS.values()
     ]

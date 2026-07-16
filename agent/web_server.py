@@ -207,6 +207,46 @@ class WebServer:
                 return {"tools": {}}
             return {"tools": getattr(self.agent_app, 'tool_status', {})}
 
+        # ══ MCP API ══
+
+        @app.get("/api/mcp/servers")
+        async def api_mcp_servers():
+            """列出所有 MCP 服务器。"""
+            try:
+                from .mcp.client import list_servers
+                servers = list_servers()
+                return {"status": "ok", "servers": servers}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
+        @app.post("/api/mcp/connect")
+        async def api_mcp_connect(body: dict = Body(...)):
+            """连接 MCP 服务器。"""
+            try:
+                from .tools_mcp import _connect_mcp
+                name = body.get("name", "")
+                command = body.get("command", "")
+                args = body.get("args", [])
+                if not name or not command:
+                    return {"status": "error", "message": "需要 name 和 command 参数"}
+                result = _connect_mcp(name, command, args)
+                return {"status": "ok", "message": result}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
+        @app.post("/api/mcp/disconnect")
+        async def api_mcp_disconnect(body: dict = Body(...)):
+            """断开 MCP 服务器。"""
+            try:
+                from .tools_mcp import _disconnect_mcp
+                name = body.get("name", "")
+                if not name:
+                    return {"status": "error", "message": "需要 name 参数"}
+                result = _disconnect_mcp(name)
+                return {"status": "ok", "message": result}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
         @app.get("/api/health")
         async def api_health():
             return {"status": "ok", "port": self.port}

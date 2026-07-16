@@ -338,6 +338,31 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-deep);color
 .cfg-t{width:100%;padding:7px;background:rgba(255,255,255,0.03);border:1px dashed var(--bd);border-radius:var(--r-sm);color:var(--fg-3);font-size:12px;cursor:pointer;font-family:inherit;transition:var(--t);margin-top:4px}
 .cfg-t:hover{border-color:var(--accent);color:var(--accent)}
 
+/* ─── MCP Tab ─── */
+.mcp-sec{padding:10px}
+.mcp-card{padding:8px 10px;margin-bottom:6px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:var(--r-sm);transition:var(--t)}
+.mcp-card:hover{border-color:rgba(124,58,237,0.2)}
+.mcp-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.mcp-n{font-size:12px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:6px}
+.mcp-dot{width:6px;height:6px;border-radius:50%;background:var(--accent4);display:inline-block;flex-shrink:0}
+.mcp-dot.off{background:var(--fg-3)}
+.mcp-cmd{font-size:10px;color:var(--fg-3);font-family:var(--font-mono);margin:2px 0}
+.mcp-ts{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
+.mcp-tt{font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(124,58,237,0.1);color:var(--accent2);border:1px solid rgba(124,58,237,0.12)}
+.mcp-act{font-size:10px;padding:2px 8px;border-radius:4px;border:none;cursor:pointer;font-family:inherit;transition:var(--t)}
+.mcp-act.conn{background:rgba(52,211,153,0.1);color:var(--accent4)}
+.mcp-act.conn:hover{background:rgba(52,211,153,0.2)}
+.mcp-act.disc{background:rgba(239,68,68,0.1);color:var(--accent6)}
+.mcp-act.disc:hover{background:rgba(239,68,68,0.2)}
+.mcp-empty{padding:20px;text-align:center;color:var(--fg-3);font-size:12px}
+.mcp-form{margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:var(--r-sm);border:1px dashed var(--bd)}
+.mcp-form input{width:100%;background:var(--bg-input);border:1px solid var(--bd);color:var(--fg);padding:6px 8px;border-radius:var(--r-sm);font-size:12px;font-family:var(--font-mono);outline:none;margin-bottom:4px}
+.mcp-form input:focus{border-color:var(--accent2)}
+.mcp-form .mcp-row{display:flex;gap:4px}
+.mcp-form .mcp-row button{flex:1;padding:5px;border-radius:var(--r-sm);border:none;cursor:pointer;font-size:11px;font-family:inherit;transition:var(--t)}
+.mcp-add-btn{width:100%;padding:7px;background:rgba(255,255,255,0.02);border:1px dashed var(--bd);border-radius:var(--r-sm);color:var(--fg-3);font-size:11px;cursor:pointer;font-family:inherit;transition:var(--t);margin-top:6px}
+.mcp-add-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+
 /* ─── Agents ─── */
 .ag-sec{padding:8px}
 .ag-card{padding:9px 10px;margin-bottom:4px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:var(--r-sm);cursor:pointer;transition:var(--t)}
@@ -454,6 +479,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-deep);color
         <button class="p-tab" data-t="ev">📡 事件</button>
         <button class="p-tab" data-t="cfg">⚙</button>
         <button class="p-tab" data-t="ag">🧠</button>
+        <button class="p-tab" data-t="mcp">🔌</button>
       </div>
       <div class="p-body">
         <div class="p-content active" id="pn-tools"><div id="tools-c"></div></div>
@@ -461,6 +487,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg-deep);color
         <div class="p-content" id="pn-ev"><div class="ev-fil" id="ev-fil"></div><div id="ev-c"><div style="padding:20px;text-align:center;color:var(--fg-3);font-size:12px">等待事件...</div></div></div>
         <div class="p-content" id="pn-cfg"><div class="cfg-sec" id="cfg-c"></div></div>
         <div class="p-content" id="pn-ag"><div class="ag-sec" id="ag-c"></div></div>
+        <div class="p-content" id="pn-mcp"><div class="mcp-sec" id="mcp-c"><div class="mcp-empty">🔌 加载 MCP 服务器...</div></div></div>
       </div>
     </div>
   </div>

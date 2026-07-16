@@ -2,5 +2,17 @@
   "provider": "DeepSeek",
   "api_key": "YOUR_API_KEY_HERE",
   "model": "deepseek-chat",
-  "base_url": "https://api.deepseek.com"
+  "base_url": "https://api.deepseek.com",
+  "mcp_servers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
+    {
+      "name": "playwright",
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-playwright"]
+    }
+  ]
 }
