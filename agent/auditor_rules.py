@@ -45,8 +45,12 @@ RULES: list[AuditRule] = [
         BLOCK, message="危险操作已阻止"),
 
     AuditRule("dangerous_delete", lambda n, a, r, d, e:
-        n == "delete" and a.get("file_path", "").strip() in ("", "/", "D:\\", "C:\\"),
+        n == "delete" and a.get("file_path", "").strip() in ("/", "D:\\", "C:\\", "C:", "D:"),
         BLOCK, message="危险删除操作已阻止"),
+
+    AuditRule("empty_delete", lambda n, a, r, d, e:
+        n == "delete" and not (a.get("file_path", "") or "").strip(),
+        WARN, message="delete 未指定 file_path 参数，工具将自动报错"),
 
     # ════════════════════════════════════════════
     # 重试级 (RETRY)
