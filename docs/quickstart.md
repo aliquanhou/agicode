@@ -271,9 +271,9 @@ python -m agent
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `GOOGLE_API_KEY` | Google Gemini API key |
 | `LLM_MODEL` | Default model name |
-| `CALW_MAX_TOKENS` | Max tokens per response (default: 8192) |
-| `CALW_MAX_ROUNDS` | Max tool call rounds (default: 50) |
-| `CALW_DATA_DIR` | Data storage directory |
+| `AGICODE_MAX_TOKENS` | Max tokens per response (default: 8192) |
+| `AGICODE_MAX_ROUNDS` | Max tool call rounds (default: 50) |
+| `AGICODE_DATA_DIR` | Data storage directory |
 
 ---
 

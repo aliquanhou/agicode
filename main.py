@@ -66,9 +66,9 @@ def main():
     from agent.core import StreamHandler
 
     config = {
-        "model": os.environ.get("CALW_MODEL", "anthropic/claude-sonnet-4-20250514"),
-        "max_tokens": int(os.environ.get("CALW_MAX_TOKENS", "8192")),
-        "max_tool_rounds": int(os.environ.get("CALW_MAX_ROUNDS", "50")),
+        "model": os.environ.get("AGICODE_MODEL", "anthropic/claude-sonnet-4-20250514"),
+        "max_tokens": int(os.environ.get("AGICODE_MAX_TOKENS", "8192")),
+        "max_tool_rounds": int(os.environ.get("AGICODE_MAX_ROUNDS", "50")),
     }
 
     agent = create_agent(user_id="cli", config=config)

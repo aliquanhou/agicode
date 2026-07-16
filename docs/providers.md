@@ -139,9 +139,9 @@ export GOOGLE_API_KEY=AIza...
 export LLM_MODEL=claude-sonnet-4-20250514
 
 # Agent config
-export CALW_MAX_TOKENS=8192
-export CALW_MAX_ROUNDS=50
-export CALW_DATA_DIR=/path/to/data
+export AGICODE_MAX_TOKENS=8192
+export AGICODE_MAX_ROUNDS=50
+export AGICODE_DATA_DIR=/path/to/data
 ```
 
 ---

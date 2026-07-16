@@ -1,6 +1,6 @@
 """tools_shell — Shell 命令执行。
 
-v2.1 重写：
+v1.0 重写：
   - 统一返回格式
   - 类型注解
   - BuildRunner 优化（重试、超时、心跳）

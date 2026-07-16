@@ -1,5 +1,5 @@
 """session — 会话状态管理。
-v2.1 新增模块。
+v1.0 新增模块。
 
 统一管理 Agent 会话的生命周期状态：
   - 对话历史存储与检索
@@ -98,7 +98,7 @@ class SessionState:
 
         # 数据存储目录
         self._data_dir = data_dir or os.path.join(
-            os.environ.get("CALW_DATA_DIR", os.getcwd()),
+            os.environ.get("AGICODE_DATA_DIR", os.getcwd()),
             "data",
             user_id,
         )

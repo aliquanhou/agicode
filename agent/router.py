@@ -1,7 +1,7 @@
 """router — 智能模型路由：按任务类型自动选择最优模型。
 
-v2.1 移植版：
-  - 适配 v2.1 的 model 命名风格（如 anthropic/claude-sonnet-4-20250514）
+v1.0 移植版：
+  - 适配 v1.0 的 model 命名风格（如 anthropic/claude-sonnet-4-20250514）
   - 与 providers.py 的 create_llm_provider() 配合使用
 """
 

@@ -1,8 +1,8 @@
 """mcpserver — MCP (Model Context Protocol) 服务器管理。
 
 允许 AgiCode 连接外部 MCP 工具服务（filesystem、git 等）。
-v2.1 移植版：
-  - 与 v2.1 的工具注册表集成（tools.py register_tool）
+v1.0 移植版：
+  - 与 v1.0 的工具注册表集成（tools.py register_tool）
   - 惰性启动，不影响启动速度
 """
 

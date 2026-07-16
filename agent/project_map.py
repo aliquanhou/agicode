@@ -1,6 +1,6 @@
 """project_map — 自动扫描项目结构，生成项目地图注入 system prompt。
 
-v2.1 移植版：
+v1.0 移植版：
   - 保留完整功能：语言统计、入口检测、依赖扫描、构建/配置文件识别
   - 与 prompt.py 的 build_system_prompt() 集成
 """

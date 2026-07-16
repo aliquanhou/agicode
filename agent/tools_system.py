@@ -1,6 +1,6 @@
 """tools_system — 系统工具：服务、注册表、进程、GUI 自动化、监控。
 
-v2.1 增强：
+v1.0 增强：
   - 统一返回格式 [前缀]
   - 所有错误返回使用统一格式
   - 更清晰的 action 分发
@@ -229,7 +229,7 @@ def _handle_process(action: str = "list", name: str = "", pid: int = 0, sort_by:
         return f"[错误] 进程操作失败: {e}"
 
 
-# v2.0 兼容别名
+# v1.0 兼容别名
 _handle_process_v2 = _handle_process
 
 

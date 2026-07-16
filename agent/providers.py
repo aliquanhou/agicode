@@ -1,6 +1,6 @@
 """providers — LLM Provider 抽象层。
 
-v2.1 重构：
+v1.0 重构：
   - 统一所有 Provider 的接口：complete() 返回 {"content": str, "tool_calls": list}
   - stream_complete() 流式接口：逐 token 回调 on_text/on_tool_start
   - 支持 Anthropic、OpenAI、Gemini、Ollama

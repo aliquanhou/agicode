@@ -1,8 +1,8 @@
 """reviewer — 代码审查引擎。
 
 审查 diff 或文件，基于 LLM 分析 bug、安全、性能、风格问题。
-v2.1 移植版：
-  - 适配 v2.1 的 provider 接口（stream_complete 返回 dict）
+v1.0 移植版：
+  - 适配 v1.0 的 provider 接口（stream_complete 返回 dict）
 """
 
 from __future__ import annotations

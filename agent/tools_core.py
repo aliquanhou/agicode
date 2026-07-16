@@ -1,6 +1,6 @@
 """tools_core — 工具核心（向后兼容层 + 共享函数）。
 
-保留了 v2.0 的 TOOL_DEFINITIONS、handle_tool_call 等接口，
+保留了 v1.0 的 TOOL_DEFINITIONS、handle_tool_call 等接口，
 以便旧模块和测试代码可以继续工作。
 
 新代码请使用 tools.py 的 register_tool / execute_tool 接口。
@@ -23,7 +23,7 @@ _TOOL_RESULT_MAX_LENGTH = 120000
 """单个工具结果的最大字符数。"""
 
 
-# ── 工具装饰器（v2.0 兼容）──
+# ── 工具装饰器（v1.0 兼容）──
 
 def tool(name: str = "", description: str = "", input_schema: dict | None = None,
          category: str = "general", is_plugin: bool = False):
@@ -67,7 +67,7 @@ def _infer_schema(func: Callable) -> dict:
     return {"type": "object", "properties": props, "required": required}
 
 
-# ── 工具定义列表（v2.0 兼容 + v2.1 新工具）──
+# ── 工具定义列表（v1.0 兼容 + v1.0 新工具）──
 
 TOOL_DEFINITIONS = [
     {"name": "read", "description": "读取文件。",
@@ -159,10 +159,10 @@ _consecutive_fails: dict = {}
 _last_heal_time: float = 0.0
 
 
-# ── 工具调用调度（v2.0 兼容）──
+# ── 工具调用调度（v1.0 兼容）──
 
 def handle_tool_call(name: str, params: dict, output_callback: Callable | None = None) -> str:
-    """调度工具调用（v2.0 兼容接口）。"""
+    """调度工具调用（v1.0 兼容接口）。"""
     allowed, guard_msg = guard_tool_call(name, params)
     if not allowed:
         return f"已阻止: {guard_msg}"

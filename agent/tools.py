@@ -1,5 +1,5 @@
 """tools — 工具注册与管理。
-v2.1 重构：
+v1.0 重构：
   - 消除模块级副作用的隐式注册
   - 改用显式注册表模式（注册表就是一个普通 dict）
   - 注册在函数调用时显式发生，而非模块导入时隐式发生
@@ -256,7 +256,7 @@ def _register_builtins():
     """注册 AgiCode 内置工具。
 
     显式调用，取代之前的模块级副作用模式。
-    覆盖 v2.0 全部 36+ 工具。
+    覆盖 v1.0 全部 36+ 工具。
     """
     tool_modules = [
         # 文件操作
@@ -280,9 +280,9 @@ def _register_builtins():
         "agent.tools_memory",
         # 增强工具（定时/监控/WebSocket）
         "agent.tools_extra",
-        # v2.2: 子Agent系统
+        # v1.0: 子Agent系统
         "agent.tools_agent",
-        # v2.2: MCP 集成
+        # v1.0: MCP 集成
         "agent.tools_mcp",
     ]
 
@@ -342,7 +342,7 @@ def init_tools(config: dict | None = None):
             pass
 
 
-# ── v2.0 向后兼容导出 ──
+# ── v1.0 向后兼容导出 ──
 # 允许旧代码通过 from agent.tools import TOOL_DEFINITIONS 继续工作
 from .tools_core import TOOL_DEFINITIONS, BUILTIN_HANDLERS, PLUGIN_HANDLERS  # noqa: E402, F401
 from .tools_core import handle_tool_call, smart_truncate  # noqa: E402, F401

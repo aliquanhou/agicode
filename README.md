@@ -191,14 +191,14 @@ Apache 2.0 — See [LICENSE](LICENSE) for full text.
 ## Architecture / 架构
 
 ```
-calw-v2.2/
+agicode/
 ├── launch_gui.py                # GUI entry point
 ├── main.py                      # CLI entry point
 ├── config.json                  # API keys + MCP server config
 │
 ├── agent/                       # ★ Core agent package
 │   │
-│   │  ── v2.2 新增 ──
+│   │  ── 透明输出（新增）──
 │   ├── transcript.py            #   Event bus — every step → structured events
 │   ├── workflow.py              #   Workflow state machine — plan→steps→progress
 │   ├── agent_loader.py          #   agents/*.md → Agent type registry
@@ -254,9 +254,9 @@ calw-v2.2/
 ### One-liner
 
 ```bash
-git clone https://github.com/aliquanhou/calw.git
-cd calw
-git checkout calw-v2.2
+git clone https://github.com/aliquanhou/agicode.git
+cd agicode
+git checkout main
 pip install -r requirements.txt
 export ANTHROPIC_API_KEY=sk-ant-your-key
 python launch_gui.py              # GUI mode (recommended)
@@ -435,21 +435,17 @@ Connected MCP tools are registered as `mcp__<server>__<tool>` — usable like an
 
 ---
 
-## v2.1 vs v2.2 Comparison / 版本对比
+## Version Comparison / 版本对比
 
-| Aspect | v2.1 | v2.2 |
-|--------|------|------|
+| Aspect | Before | Now |
+|--------|--------|-----|
 | **Transparency** | Basic terminal output | Event bus + workflow state machine + GUI progress bar |
 | **Loop control** | `max_tool_rounds: 50` | `while True` — model decides |
-| **Dead-loop detection** | Hard blocking (4 calls = break) | None — zero interference |
+| **Dead-loop detection** | Hard blocking | None — zero interference |
 | **Sub-agent system** | ❌ | `subagent` tool + `agents/*.md` definitions |
 | **MCP integration** | ❌ | stdio client + auto-register tools |
-| **CLI --transcript** | ❌ | JSON event stream to stdout |
 | **GUI rendering** | Basic | Tool timing, code blocks, step summary, next hint |
 | **Plan sync** | plan writes JSON file | plan ↔ workflow state machine ↔ GUI |
-| **One-click log** | ❌ | 📋 Copy Log button |
-| **Agent definitions** | ❌ | YAML frontmatter + Markdown prompt |
-| **Config MCP auto-connect** | ❌ | `mcp_servers` in config.json |
 
 ---
 
@@ -466,8 +462,8 @@ python -m pytest tests/test_session.py -v
 ## Learn More / 了解更多
 
 - **[Technical Whitepaper](TECHNICAL_WHITEPAPER.md)** — Full architecture, benchmarks, contribution guide
-- **[Changelog](CHANGELOG.md)** — Version history v1.0 → v2.2
-- **[GitHub PR #1](https://github.com/aliquanhou/calw/pull/1)** — v2.2 diff (18 files, +2039/-309)
+- **[Changelog](CHANGELOG.md)** — Version history
+- **[GitHub Repository](https://github.com/aliquanhou/agicode)** — View source, issues, and discussions
 
 ---
 

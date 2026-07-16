@@ -138,7 +138,7 @@ download(url="https://example.com/file.zip", destination="/path/save")
 revert(file_path="/path/to/file")
 ```
 
-> ⚠️ Requires backup system (WIP in v2.2).
+> ⚠️ Requires backup system (WIP in v1.0).
 
 ---
 

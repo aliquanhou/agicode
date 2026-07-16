@@ -90,7 +90,7 @@ PROVIDER_PRESETS = {
 
 PROVIDER_NAMES = list(PROVIDER_PRESETS.keys())
 
-# ── v2.0 兼容：get_default_provider / get_provider 内联 ──
+# ── v1.0 兼容：get_default_provider / get_provider 内联 ──
 
 def _get_default_provider() -> str:
     return PROVIDER_NAMES[0] if PROVIDER_NAMES else "OpenAI"
@@ -288,7 +288,7 @@ class AgentApp(ctk.CTk):
         self._think_buffer: str = ""
         self._think_header_shown: bool = False
 
-        # ── v2.2 升级：滚动指示器 + 思考时间 + diff 渲染 ──
+        # ── v1.0 升级：滚动指示器 + 思考时间 + diff 渲染 ──
         self._new_msg_count: int = 0               # 滚动到上方后累积的新消息行数
         self._user_scrolled_up: bool = False        # 用户是否滚到了上方
         self._last_scroll_bottom: bool = True       # 滚动条是否在底部
@@ -359,7 +359,7 @@ class AgentApp(ctk.CTk):
             ("sep", COLOR_SEPARATOR, (FONT_MONO, 8)),
             ("dim", "#666", (FONT_MONO, 11)),
             ("num", "#F78C6C", (FONT_MONO, 12)),
-            # v2.2: Diff 渲染
+            # v1.0: Diff 渲染
             ("diff_header", "#569CD6", (FONT_MONO, 11, "bold")),   # ---/+++ 文件头
             ("diff_add", "#4CAF50", (FONT_MONO, 11)),               # 新增行 +
             ("diff_del", "#F44336", (FONT_MONO, 11)),               # 删除行 -
@@ -725,7 +725,7 @@ class AgentApp(ctk.CTk):
     def _update_context_bar(self):
         """Update the context usage progress bar with current token counts.
 
-        v2.2: Shows "82% context used" style indicator like AI coding assistants.
+        v1.0: Shows "82% context used" style indicator like AI coding assistants.
         """
         if not self.agent or not self.agent.messages:
             self.ctx_progress.set(0)
@@ -799,7 +799,7 @@ class AgentApp(ctk.CTk):
                     self.after_idle(self._update_workflow_display)
             self.transcript.on("*", _on_transcript)
 
-            # Agent 配置（v2.2 透明 + MCP）
+            # Agent 配置（v1.0 透明 + MCP）
             config = {
                 "api_key": self.api_key,
                 "model": self.model,
@@ -907,7 +907,7 @@ class AgentApp(ctk.CTk):
         except Exception as e:
             self._chat_line(f"复制失败: {e}", "err")
 
-    # ── v2.2：滚动管理 ──
+    # ── v1.0：滚动管理 ──
 
     def _is_scroll_at_bottom(self, tolerance: int = 30) -> bool:
         """检测滚动条是否在底部（tolerance=30px 容忍）。"""

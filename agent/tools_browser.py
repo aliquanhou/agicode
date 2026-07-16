@@ -1,11 +1,11 @@
 """tools_browser — 浏览器自动化控制工具。
 
-v2.1 改进：
+v1.0 改进：
   - 自动检测 Playwright 浏览器是否可用
   - 不可用时降级为 HTTP 抓取（同样能读网页内容）
   - 无需安装 Playwright 专用浏览器即可使用
 
-v2.2 修复：
+v1.0 修复：
   - 使用 thread-local storage 隔离多 Agent 浏览器实例
   - 避免全局变量共享导致的竞态
 """

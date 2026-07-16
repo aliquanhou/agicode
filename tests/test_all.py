@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # ═══════════════════════════════════════════
 
 class TestToolRegistry(unittest.TestCase):
-    """Test the new v2.1 tool registry system."""
+    """Test the new v1.0 tool registry system."""
 
     def setUp(self):
         from agent.tools import _TOOL_REGISTRY

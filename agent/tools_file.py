@@ -1,11 +1,11 @@
 """tools_file — 文件操作工具集。
 
-v2.1 改进：
+v1.0 改进：
   - 使用 file_cache 加速文件读取
   - 消除静默异常
   - 明确的路径解析
 
-v2.2 改进：
+v1.0 改进：
   - 编辑/写入时自动生成 Unified Diff，供 GUI 渲染
 """
 
@@ -464,5 +464,5 @@ def _handle_replace(file_path: str = "", search: str = "", replace_text: str = "
 
 def _handle_revert(file_path: str = "") -> str:
     """撤销对文件的修改（TODO: 需接入备份系统）。"""
-    return "[revert] 该功能需要接入备份系统（v2.2 支持）"
+    return "[revert] 该功能需要接入备份系统（v1.0 支持）"
 

@@ -1,6 +1,6 @@
 """prompt — 系统提示词构建。
 
-v2.1 改进：
+v1.0 改进：
   - 提示词模板脱耦（不硬编码在 core.py 中）
   - 支持按需加载 memory context 和 project_map
   - 更专业的开源项目提示词
@@ -111,7 +111,7 @@ def _build_tools_description(tools: list[dict] | None = None) -> str:
 # ── 公开 API ──
 
 
-# ── v2.0 兼容：SYSTEM_PROMPT 常量 ──
+# ── v1.0 兼容：SYSTEM_PROMPT 常量 ──
 SYSTEM_PROMPT = BASE_SYSTEM_PROMPT.format(tools_description="(工具列表由 GUI 动态填充)")
 
 

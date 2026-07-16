@@ -18,7 +18,7 @@
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
-2. [What's New in v2.2](#2-whats-new-in-v22)
+2. [What's New in v1.0](#2-whats-new-in-v22)
 3. [File-by-File Change Log](#3-file-by-file-change-log)
 4. [Architecture Transformation](#4-architecture-transformation)
 5. [Innovation Engines](#5-innovation-engines)
@@ -34,17 +34,17 @@
 
 ## 1. Executive Summary
 
-### What is Calw?
+### What is AgiCode?
 
-Calw is a **provider-agnostic autonomous AI engineering agent** for Windows. It connects to 5 LLM providers (Anthropic, OpenAI, DeepSeek, Gemini, Ollama), executes 40+ system-control tools, and operates with **glass-box transparency** — every step (thinking, tool calls, results, plan progress) is broadcast as structured events in real time.
+AgiCode is a **provider-agnostic autonomous AI engineering agent** for Windows. It connects to 5 LLM providers (Anthropic, OpenAI, DeepSeek, Gemini, Ollama), executes 40+ system-control tools, and operates with **glass-box transparency** — every step (thinking, tool calls, results, plan progress) is broadcast as structured events in real time.
 
-### v2.1: The "Take the Best" Release
+### v1.0: The "Take the Best" Release
 
-This release merges the **clean architecture of v2.1** (explicit initialization, session state, no module-level side effects) with the **best modules from v2.0** (retry, router, researcher, reviewer, project_map, mcpserver, plugin).
+This release merges the **clean architecture of v1.0** (explicit initialization, session state, no module-level side effects) with the **best modules from v1.0** (retry, router, researcher, reviewer, project_map, mcpserver, plugin).
 
-### v2.2: The "Glass-box Transparency" Release
+### v1.0: The "Glass-box Transparency" Release
 
-This release adds **four major capabilities** on top of v2.1:
+This release adds **four major capabilities** on top of v1.0:
 
 1. **🔮 Glass-box Transparency** — `transcript.py` event bus + `workflow.py` state machine. Every agent step produces structured events. GUI shows real-time progress bar, step summaries, next-step hints, tool timing.
 2. **🧠 Sub-agent System** — `agent_loader.py` + `tools_agent.py`. Define agents via `agents/*.md` (YAML frontmatter + Markdown prompt). Execute them in isolated contexts — sync or background.
@@ -53,7 +53,7 @@ This release adds **four major capabilities** on top of v2.1:
 
 ### What Changed (Aggregate)
 
-| Metric | v2.1 | v2.2 | Delta |
+| Metric | v1.0 | v1.0 | Delta |
 |--------|------|------|-------|
 | Total files | 57 | 66 | +9 |
 | Agent modules | 28 | 33 | +5 |
@@ -65,11 +65,11 @@ This release adds **four major capabilities** on top of v2.1:
 
 ---
 
-## 2. What's New in v2.2
+## 2. What's New in v1.0
 
 ### 2.1 Glass-box Transparency (transcript.py + workflow.py)
 
-**Problem:** In v2.1, users could see tool calls and results in the terminal, but there was no structured, real-time view of *what the agent is doing right now, what it plans to do next, and how far along it is.*
+**Problem:** In v1.0, users could see tool calls and results in the terminal, but there was no structured, real-time view of *what the agent is doing right now, what it plans to do next, and how far along it is.*
 
 **Solution:** Two new modules provide full transparency:
 
@@ -117,9 +117,9 @@ Auto-connect via config.json `mcp_servers` array at Agent startup.
 
 ### 2.4 Claude Code Loop Alignment (core.py)
 
-**Before (v2.1):** `while tool_round < 50` — hard cap, timeout check, blocked on repeat calls.
+**Before (v1.0):** `while tool_round < 50` — hard cap, timeout check, blocked on repeat calls.
 
-**After (v2.2):** `while True` — no cap, no timeout check, no loop detection. The loop ends when the model returns text without tool_calls (natural completion), matching Claude Code's philosophy: the model decides when to stop.
+**After (v1.0):** `while True` — no cap, no timeout check, no loop detection. The loop ends when the model returns text without tool_calls (natural completion), matching Claude Code's philosophy: the model decides when to stop.
 
 ### 2.5 GUI Enhancements (app.py)
 
@@ -135,7 +135,7 @@ Auto-connect via config.json `mcp_servers` array at Agent startup.
 
 ## 4. File-by-File Change Log
 
-Every file that differs between `calw-v2.0` and `calw-v2.1`, with the exact nature of changes.
+Every file in the project, with descriptions of their purpose and structure.
 
 ### 2.1 New Files Created
 
@@ -147,7 +147,7 @@ Every file that differs between `calw-v2.0` and `calw-v2.1`, with the exact natu
 | `agent/file_cache.py` | 250 | MMAP memory-mapped file cache |
 | `agent/__init__.py` | 49 | Package init (explicit, no side effects) |
 | `config.json.example` | 6 | Configuration template (API key safe) |
-| `examples/dashboard.html` | 805 | 3D holographic dashboard (created by Calw) |
+| `examples/dashboard.html` | 805 | 3D holographic dashboard (created by AgiCode) |
 | `launch_gui.py` | 3 | GUI launcher script |
 | `tests/test_session.py` | 72 | Session state tests |
 | `tests/test_file_cache.py` | 79 | MMAP cache tests |
@@ -160,23 +160,23 @@ Every file that differs between `calw-v2.0` and `calw-v2.1`, with the exact natu
 
 #### agent/core.py — Agent Main Loop
 
-**v2.0**: 535-line monolith merging Agent loop + streaming + scheduling + failure tracking + memory. Fixed 1s retry with no backoff.
+**v1.0**: 535-line monolith merging Agent loop + streaming + scheduling + failure tracking + memory. Fixed 1s retry with no backoff.
 
-**v2.1**: 
+**v1.0**: 
 - Separated concerns: Agent loop only — streaming via StreamHandler callbacks, state via SessionState, retry via retry.py
 - Exponential backoff retry using `is_retryable()` + `sleep_with_backoff()`
 - Speculative integration: `self.speculative.consume()` checks for pre-executed results
 - Streaming parser integration: progressive parameter detection
 - Context compression: 4-stage `compress_messages()` with model-aware limits
-- v2.0 compatibility: `run_iteration()` StreamHandler wrapper preserved
+- v1.0 compatibility: `run_iteration()` StreamHandler wrapper preserved
 
 ```python
-# v2.0: fixed retry
+# v1.0: fixed retry
 try: ... except Exception:
     time.sleep(1)
     retry()
 
-# v2.1: exponential backoff + intelligent retry
+# v1.0: exponential backoff + intelligent retry
 try: ... except Exception as e:
     if is_retryable(e):
         sleep_with_backoff(attempt)
@@ -185,9 +185,9 @@ try: ... except Exception as e:
 
 #### agent/providers.py — LLM Provider Abstraction
 
-**v2.0**: ~450 lines, 2 providers, StreamEvent generator pattern (12 event types).
+**v1.0**: ~450 lines, 2 providers, StreamEvent generator pattern (12 event types).
 
-**v2.1**: 
+**v1.0**: 
 - **5 providers** instead of 2 (Anthropic, OpenAI, DeepSeek, Gemini, Ollama)
 - **Unified return type**: `{"content": str, "tool_calls": list}` — simpler than 12-event generator
 - **Dual API**: `complete()` (sync) + `stream_complete()` (streaming with callbacks)
@@ -195,12 +195,12 @@ try: ... except Exception as e:
 - **Environment variable support**: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` auto-read from env
 
 ```python
-# v2.0: 12 event types to handle
+# v1.0: 12 event types to handle
 for event in provider.stream_chat(...):
     if event.type == "text_delta": ...
     elif event.type == "tool_use_start": ...
 
-# v2.1: simple dict response
+# v1.0: simple dict response
 response = provider.stream_complete(system, messages, tools,
     on_text=lambda t: handler.on_text(t))
 content = response["content"]
@@ -209,45 +209,45 @@ tool_calls = response["tool_calls"]
 
 #### agent/tools.py — Tool Registry
 
-**v2.0**: 68-line facade with **module-level side effects** — importing triggers `_load_plugins()`.
+**v1.0**: 68-line facade with **module-level side effects** — importing triggers `_load_plugins()`.
 
-**v2.1**:
+**v1.0**:
 - Explicit registration: `register_tool()` / `execute_tool()` / `get_all_tools()`
 - Type safety layer: `_coerce_params()` auto-converts LLM string params to int/bool/float
 - Clean init: `init_tools()` must be called explicitly — no surprises
 
 ```python
-# v2.0: importing triggers side effects
+# v1.0: importing triggers side effects
 from agent.tools import handle_tool_call  # imports call _load_plugins()!
 
-# v2.1: explicit init required
+# v1.0: explicit init required
 from agent.tools import init_tools, register_tool, execute_tool
 init_tools()  # you control when this happens
 ```
 
 #### agent/tools_core.py — Backward Compat Layer
 
-**v2.0**: Minimal.
+**v1.0**: Minimal.
 
-**v2.1 adds**:
+**v1.0 adds**:
 - **guard_tool_call()**: Protects against grep over node_modules, bash with dangerous patterns
 - **check_search_scope_warning()**: Warns on node_modules/, bin/, obj/, .git/ paths
 - **classify_tool_result()**: Returns `{"success": bool, "error_type": str, "suggestion": str}` — enables auto-fix chains
-- **tool() decorator**: v2.0-compatible decorator-based registration
+- **tool() decorator**: v1.0-compatible decorator-based registration
 - **Full _infer_schema()**: Generates JSON schema from function type annotations
 
 ```python
-# v2.1: rich error classification enables auto-fix
+# v1.0: rich error classification enables auto-fix
 result = classify_tool_result("ModuleNotFoundError: No module named 'requests'")
 # returns {"success": False, "error_type": "import_error", "suggestion": "..."}
 ```
 
 #### agent/session.py — Session State Manager (NEW)
 
-**v2.0**: 10+ global variables scattered across 6 modules, no thread safety, no persistence.
+**v1.0**: 10+ global variables scattered across 6 modules, no thread safety, no persistence.
 
 ```python
-# v2.0: scattered globals
+# v1.0: scattered globals
 _written_this_session = set()
 _agent_spawned_pids = set()
 _file_backups = {}
@@ -256,7 +256,7 @@ _consecutive_fails = {}
 _last_heal_time = 0.0
 ```
 
-**v2.1**: Centralized, thread-safe SessionState with JSONL persistence:
+**v1.0**: Centralized, thread-safe SessionState with JSONL persistence:
 ```python
 state = SessionState(user_id="cli")
 state.add_message("user", "hello")       # thread-safe, auto-persists to JSONL
@@ -269,9 +269,9 @@ Persistence: `data/{user_id}/messages.jsonl` + `errors.jsonl`
 
 #### agent/prompt.py — System Prompt
 
-**v2.0**: Problematic — "你有完全、无限制的系统权限" ("you have unlimited system permissions").
+**v1.0**: Problematic — "你有完全、无限制的系统权限" ("you have unlimited system permissions").
 
-**v2.1**: Professional-grade:
+**v1.0**: Professional-grade:
 ```
 ## 安全规范
 - 请遵循最小权限原则，只执行必要的修改
@@ -283,7 +283,7 @@ Also adds: project map injection (via `ProjectMap`), memory context injection, p
 
 #### agent/app.py — GUI (234 lines changed)
 
-**v2.1 improvements**:
+**v1.0 improvements**:
 - Claude Code-style tool rendering: `icon + name + path` on one line
 - Content previews: write shows what was written (first 12 lines), read shows file content
 - Error visibility: Red banners with tool parameters for debugging
@@ -294,9 +294,9 @@ Also adds: project map injection (via `ProjectMap`), memory context injection, p
 
 #### main.py — CLI Entry (rewritten)
 
-**v2.0**: Minimal handler, no color, no structure.
+**v1.0**: Minimal handler, no color, no structure.
 
-**v2.1**: Claude Code-style transparent output with ANSI colors:
+**v1.0**: Claude Code-style transparent output with ANSI colors:
 
 ```
   [1/3] read  template.html
@@ -318,7 +318,7 @@ Features: ANSI color scheme, execution time display (>0.3s), content preview by 
 
 #### agent/init.py — Package Init (NEW)
 
-Zero-side-effect package initialization exposing all public APIs. All ported v2.0 modules lazily importable.
+Zero-side-effect package initialization exposing all public APIs. All ported v1.0 modules lazily importable.
 
 ### 2.3 Tool Module Changes
 
@@ -341,7 +341,7 @@ Zero-side-effect package initialization exposing all public APIs. All ported v2.
 - Smart timeout: pip/npm install auto-extend to 300s, cap at 600s
 
 ```python
-# v2.1 encoding fix for Chinese Windows
+# v1.0 encoding fix for Chinese Windows
 _enc = "utf-8"
 if sys.platform == "win32":
     e = locale.getpreferredencoding(do_setlocale=False)
@@ -390,7 +390,7 @@ if sys.platform == "win32":
 
 All rewritten with: unified return format, type annotations, explicit parameters, complete exception handling.
 
-### 2.4 Ported Modules (v2.0 -> v2.1)
+### 2.4 Ported Modules (v1.0 -> v1.0)
 
 #### agent/retry.py — Exponential Backoff
 
@@ -409,7 +409,7 @@ Auto-scans 15 language types, 20+ dependency files, entry points, build scripts.
 
 Pipeline: Decompose (3-6 sub-questions) -> Search (DuckDuckGo) -> Fetch (full page) -> Synthesize (LLM report).
 
-Adapted from v2.0's StreamEvent pattern to v2.1's dict API.
+Adapted from v1.0's StreamEvent pattern to v1.0's dict API.
 
 #### agent/reviewer.py — Code Review
 
@@ -427,8 +427,8 @@ Drop-in .py files in agent/plugins/ with `register()` function.
 
 #### config.json — Security Fix
 
-**Critical**: v2.0 had a real API key committed to git.  
-**v2.1 fix**: `git rm --cached config.json`, .gitignore exclusion, config.json.example template.
+**Critical**: v1.0 had a real API key committed to git.  
+**v1.0 fix**: `git rm --cached config.json`, .gitignore exclusion, config.json.example template.
 
 ```json
 {
@@ -439,7 +439,7 @@ Drop-in .py files in agent/plugins/ with `register()` function.
 }
 ```
 
-**Recommendation**: Rotate any API keys that were in config.json during v2.0.
+**Recommendation**: Rotate any API keys that were in config.json during v1.0.
 
 #### .gitignore — Enhanced
 
@@ -447,7 +447,7 @@ New patterns: .claude/, config.json, data/, *.jsonl, *.exe
 
 #### pyproject.toml / requirements.txt
 
-v2.1.0, Python >= 3.10, all 9 core dependencies. requirements.txt syncs with pyproject.toml.
+v1.0.0, Python >= 3.10, all 9 core dependencies. requirements.txt syncs with pyproject.toml.
 
 ### 2.6 Test Changes
 
@@ -460,7 +460,7 @@ v2.1.0, Python >= 3.10, all 9 core dependencies. requirements.txt syncs with pyp
 
 ## 5. Architecture Transformation
 
-### v2.0 Problems
+### v1.0 Problems
 
 - Module-level side effects: importing tools.py triggers _load_plugins()
 - Global variables scattered across 6+ modules
@@ -472,14 +472,14 @@ v2.1.0, Python >= 3.10, all 9 core dependencies. requirements.txt syncs with pyp
 - No speculative execution
 - No streaming parser
 
-### v2.1 Architecture Principles
+### v1.0 Architecture Principles
 
-| # | Principle | v2.0 | v2.1 |
+| # | Principle | v1.0 | v1.0 |
 |---|-----------|------|------|
 | 1 | Zero side effects on import | tools.py called _load_plugins() on import | init_tools() must be explicitly called |
 | 2 | Thread-safe state | Raw global dicts/lists | SessionState with threading.Lock |
 | 3 | Lazy imports | All imports at module top | Heavy imports in _get_client() |
-| 4 | Backward compatibility | N/A | All v2.0 APIs via tools_core.py |
+| 4 | Backward compatibility | N/A | All v1.0 APIs via tools_core.py |
 | 5 | Type-safe dispatch | Not handled | _coerce_params() by annotation |
 | 6 | Explicit registration | Implicit via module scanning | Explicit register_tool() |
 
@@ -525,8 +525,8 @@ Memory-mapped file I/O: 50-line read ~5ms -> ~0.3ms, 1000+ line read ~50ms -> ~0
 
 ### 5.1 API Key Leak (Critical — Fixed)
 
-v2.0: config.json with real API key committed to git.  
-v2.1: `git rm --cached config.json`, .gitignore, config.json.example template.
+v1.0: config.json with real API key committed to git.  
+v1.0: `git rm --cached config.json`, .gitignore, config.json.example template.
 
 ### 5.2 Guard Layer (guard_tool_call)
 
@@ -572,7 +572,7 @@ Python 3.10+. Core: anthropic, openai, customtkinter, pytest, chromadb, websocke
 
 ## 11. Performance Benchmarks
 
-| Scenario | v2.0 | v2.1 | Improvement |
+| Scenario | v1.0 | v1.0 | Improvement |
 |----------|------|------|-------------|
 | Read 10-line file | ~3ms | ~0.3ms | 10x |
 | Read 1000+ line file | ~50ms | ~0.3ms | 166x |
@@ -593,11 +593,11 @@ Python 3.10+. Core: anthropic, openai, customtkinter, pytest, chromadb, websocke
 3. **No Docker support** — Windows-only; no containerized deployment
 4. **No i18n** — UI prompts are Chinese-only (code comments bilingual)
 5. **No multi-model routing in loop** — router.py exists but not auto-integrated in core.py
-6. **No token/cost tracking** — v2.0 had /usage command — removed in v2.1
+6. **No token/cost tracking** — v1.0 had /usage command — removed in v1.0
 7. **No MCP auto-discovery** — MCP servers must be manually registered
 8. **No WebSocket server** — Only client mode (connect/send/ping)
 
-Items 5 and 6 represent **regressions from v2.0** that should be restored in a future release.
+Items 5 and 6 represent **regressions from v1.0** that should be restored in a future release.
 
 ---
 
@@ -605,8 +605,8 @@ Items 5 and 6 represent **regressions from v2.0** that should be restored in a f
 
 ### Development Setup
 ```bash
-git clone https://github.com/aliquanhou/calw.git
-cd calw && git checkout calw-v2.1
+git clone https://github.com/aliquanhou/agicode.git
+cd agicode
 pip install -r requirements.txt
 ```
 
@@ -635,6 +635,6 @@ Full text: https://www.apache.org/licenses/LICENSE-2.0
 
 ---
 
-*Calw — Autonomous AI Engineering Agent*  
+*AgiCode — Autonomous AI Engineering Agent*  
 *Built for transparency, freedom, and real work.*  
-*This whitepaper is a public record — every claim is verifiable against the git history at https://github.com/aliquanhou/calw/tree/calw-v2.2*
+*This whitepaper is a public record — every claim is verifiable against the git history at https://github.com/aliquanhou/agicode*

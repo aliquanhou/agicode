@@ -1,6 +1,6 @@
 """core — Agent 核心循环。
 
-v2.2 重构：
+v1.0 重构：
   透明输出 + 工作流状态机 + 防死循环 + Claude 优先。
 
 设计原则：
@@ -12,7 +12,7 @@ v2.2 重构：
 与其他模块的关系：
   - transcript.py → 所有事件的出口
   - workflow.py  → 工作流状态机 + 防死循环
-  - tools.py     → 工具注册 + 执行（v2.1 显式注册表）
+  - tools.py     → 工具注册 + 执行（v1.0 显式注册表）
   - session.py   → 会话持久化
   - context.py   → 上下文压缩
   - providers.py → LLM 调用（Claude 一等公民）
@@ -56,10 +56,10 @@ DEFAULT_CONFIG = {
 }
 
 
-# ── StreamHandler（v2.0 兼容）──
+# ── StreamHandler（v1.0 兼容）──
 
 class StreamHandler:
-    """v2.0 兼容的流处理器基类。"""
+    """v1.0 兼容的流处理器基类。"""
     def on_text(self, text: str): pass
     def on_thinking(self, text: str): pass
     def on_tool_start(self, name: str, input_data: dict): pass
@@ -421,10 +421,10 @@ class Agent:
         except Exception as e:
             self.transcript.error(source="context", message=str(e))
 
-    # ── v2.0 兼容接口 ──
+    # ── v1.0 兼容接口 ──
 
     def run_iteration(self, user_input: str, handler: StreamHandler | None = None) -> None:
-        """v2.0 兼容接口。"""
+        """v1.0 兼容接口。"""
         handler = handler or StreamHandler()
         self.transcript.on("*", lambda e: self._bridge_handler(e, handler))
 
@@ -441,7 +441,7 @@ class Agent:
             handler.on_error(str(e))
 
     def _bridge_handler(self, event, handler: StreamHandler):
-        """将转录事件桥接到 v2.0 StreamHandler。"""
+        """将转录事件桥接到 v1.0 StreamHandler。"""
         if event.type == "thinking":
             handler.on_thinking(event.payload.get("delta", ""))
         elif event.type == "tool" and event.subtype == "start":

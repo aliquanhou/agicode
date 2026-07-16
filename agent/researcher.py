@@ -1,8 +1,8 @@
 """researcher — 深度研究引擎。
 
 基于多来源网页搜索的深度研究，自动分解问题、搜集资料、综合分析。
-v2.1 移植版：
-  - 适配 v2.1 的 provider 接口（stream_complete 返回 dict）
+v1.0 移植版：
+  - 适配 v1.0 的 provider 接口（stream_complete 返回 dict）
   - 使用统一的 web_search 工具而非内联实现
 """
 
