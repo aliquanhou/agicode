@@ -199,13 +199,26 @@ class AgentApp(ctk.CTk):
             except Exception:
                 pass
 
+    def _save_config(self):
+        """保存配置到 config.json"""
+        try:
+            p = self._config_path()
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump({
+                    "provider": self.provider_name,
+                    "api_key": self.api_key,
+                    "model": self.model,
+                    "base_url": self.base_url,
+                }, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
     def _init_agent(self):
         if not self.api_key:
             return
         try:
             self.transcript = Transcript(agent_id="agicode-web")
-            # 订阅 transcript → SSE 广播
-            self.transcript.on("*", lambda e: self.web_server.push_sse(e.type, e.payload))
+            # WebStreamHandler 已推送 SSE，这里不再重复订阅
 
             config = {
                 "api_key": self.api_key,

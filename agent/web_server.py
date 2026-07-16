@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -118,9 +118,13 @@ class WebServer:
             """发送用户消息给 Agent。"""
             if not self.agent_app:
                 return {"status": "error", "message": "Agent not initialized"}
+            if not self.agent_app.api_key:
+                return {"status": "error", "message": "请先点击 ⚙ Settings 配置 API Key"}
+            if self.agent_app.busy:
+                return {"status": "error", "message": "Agent 正在工作中，请等待完成"}
             text = body.text.strip()
             if not text:
-                return {"status": "error", "message": "Empty message"}
+                return {"status": "error", "message": "消息不能为空"}
             if hasattr(self.agent_app, '_send_text'):
                 self.agent_app.after_idle(lambda: self.agent_app._send_text(text))
             return {"status": "ok"}
@@ -158,13 +162,42 @@ class WebServer:
         @app.get("/api/context")
         async def api_context():
             """返回上下文信息。"""
-            if not self.agent_app or not self.agent_app.agent:
-                return {"busy": False, "provider": "", "model": ""}
+            if not self.agent_app:
+                return {"busy": False, "provider": "", "model": "", "has_key": False}
             return {
                 "busy": self.agent_app.busy,
                 "provider": self.agent_app.provider_name,
                 "model": self.agent_app.model,
+                "has_key": bool(self.agent_app.api_key),
             }
+
+        @app.get("/api/config")
+        async def api_get_config():
+            """获取当前配置。"""
+            if not self.agent_app:
+                return {"provider": "", "model": "", "api_key": "", "base_url": ""}
+            return {
+                "provider": self.agent_app.provider_name,
+                "model": self.agent_app.model,
+                "api_key": "****" if self.agent_app.api_key else "",
+                "base_url": self.agent_app.base_url,
+            }
+
+        @app.post("/api/config")
+        async def api_set_config(body: dict):
+            """保存配置并重新初始化 Agent。"""
+            if not self.agent_app:
+                return {"status": "error", "message": "Not initialized"}
+            try:
+                self.agent_app.provider_name = body.get("provider", self.agent_app.provider_name)
+                self.agent_app.api_key = body.get("api_key", self.agent_app.api_key)
+                self.agent_app.model = body.get("model", self.agent_app.model)
+                self.agent_app.base_url = body.get("base_url", self.agent_app.base_url)
+                self.agent_app._save_config()
+                self.agent_app._init_agent()
+                return {"status": "ok"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
 
         @app.get("/api/tools")
         async def api_tools():
