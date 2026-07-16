@@ -128,14 +128,7 @@ function loadState(){
   }catch(e){return false;}
 }
 
-// 在每次状态改变后自动保存
-function autoSave(){
-  if(typeof msgs!=='undefined' && msgs){
-    // 防抖：延迟保存，避免频繁写入
-    if(window._saveTimer) clearTimeout(window._saveTimer);
-    window._saveTimer = setTimeout(saveState, 500);
-  }
-}
+// autoSave 已废弃 — 改为定时 30s + beforeunload 保存
 
 // ─── DOM ───
 var $=function(id){return document.getElementById(id)};
@@ -289,7 +282,7 @@ function hasDiff(t){return t.indexOf('@@ -')>=0||(t.indexOf('\n+')>=0&&t.indexOf
 // ══════════════════════════════════════════════════
 
 // Assistant text (streaming accumulator)
-function addText(delta){try{autoSave()}catch(e){}
+function addText(delta){
   var last=msgs.lastElementChild;
   if(last&&last.classList.contains('msg-asst')){
     last._acc=(last._acc||'')+delta;
@@ -305,7 +298,7 @@ function addText(delta){try{autoSave()}catch(e){}
 }
 
 // User message
-function addUser(text){try{autoSave()}catch(e){}
+function addUser(text){
   var el=div('msg msg-user');
   el.innerHTML='<div class="mc">'+esc(text)+'</div><div class="mt">'+ts()+'</div>';
   msgs.appendChild(el);scrollB();
@@ -313,7 +306,7 @@ function addUser(text){try{autoSave()}catch(e){}
 
 // Tool call line — compact, Claude Code style
 var _toolSeq=0;
-function addToolCall(name, path, extra){try{autoSave()}catch(e){}
+function addToolCall(name, path, extra){
   var icon=I[name]||'⚡';
   var extraHtml=extra?' <span class="tl-extra">'+esc(extra)+'</span>':'';
   var pathHtml=path?'<span class="tl-target">'+esc(path)+'</span>':'';
@@ -433,7 +426,7 @@ function renderDiff(refEl, diffText, filePath){
 }
 
 // Thinking block
-function addThink(text){try{autoSave()}catch(e){}
+function addThink(text){
   var last=msgs.lastElementChild;
   if(last&&last.classList.contains('think-block')){
     var b=last.querySelector('.think-b');
@@ -447,14 +440,14 @@ function addThink(text){try{autoSave()}catch(e){}
 }
 
 // System message
-function addSys(text){try{autoSave()}catch(e){}
+function addSys(text){
   var el=div('msg msg-sys');
   el.innerHTML='<div class="mc">'+esc(text)+'</div>';
   msgs.appendChild(el);scrollB();
 }
 
 // Error message
-function addErr(text){try{autoSave()}catch(e){}
+function addErr(text){
   var el=div('msg msg-err');
   el.innerHTML='<div class="mc">'+esc(text)+'</div>';
   msgs.appendChild(el);scrollB();
@@ -567,7 +560,7 @@ function send(){
 function stop(){if(!S.busy)return;fetch('/api/stop',{method:'POST'}).catch(function(){});setBusy(0);addSys('⏹ 已终止');}
 function retry(){if(S.busy||!S.last)return;ib.value=S.last;send();}
 
-function clear(){try{autoSave()}catch(e){}
+function clear(){
   msgs.innerHTML='';
   S.toolCount=0;S.wfSteps=[];S.wfDone=0;S.wfTotal=0;$('st-c').textContent='0';
   S.events=[];
@@ -589,14 +582,14 @@ function setBusy(b){
 // WORKFLOW
 // ══════════════════════════════════════════════════
 
-function updateWf(wf){try{autoSave()}catch(e){}
+function updateWf(wf){
   if(!wf)return;
   if(wf.steps){S.wfSteps=wf.steps;S.wfTotal=wf.steps.length;S.wfDone=wf.steps.filter(function(s){return s.status==='done'||s.status==='skipped';}).length;}
   if(wf.progress!==undefined)wff.style.width=(wf.progress*100)+'%';
   renderWfPanel();updateWfBar();
 }
 
-function updateWfStep(id,status,name,result){try{autoSave()}catch(e){}
+function updateWfStep(id,status,name,result){
   for(var i=0;i<S.wfSteps.length;i++){if(S.wfSteps[i].id===id||S.wfSteps[i].name===name){S.wfSteps[i].status=status;break;}}
   S.wfDone=S.wfSteps.filter(function(s){return s.status==='done'||s.status==='skipped';}).length;
   S.wfTotal=S.wfSteps.length;
@@ -645,7 +638,7 @@ function renderEvFilters(){
   });
 }
 
-function addEvent(type,data){try{autoSave()}catch(e){}
+function addEvent(type,data){
   S.events.push({type:type,data:data||'',ts:Date.now()});
   if(S.events.length>500)S.events.shift();
   renderEvLog();
@@ -960,13 +953,14 @@ function init(){
     saveState();
   });
 
-  // Periodic context check
+  // Periodic save + context check (每 30s 持久化一次，不阻塞主流程)
   setInterval(function(){
+    saveState();
     fetch('/api/context').then(function(r){return r.json()}).then(function(d){
       if(d.busy!==undefined&&d.busy!==S.busy)setBusy(d.busy);
       if(d.provider){$('st-p').textContent=d.provider||$('st-p').textContent;$('st-m').textContent=d.model||$('st-m').textContent}
     }).catch(function(){});
-  },10000);
+  },30000);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
